@@ -210,7 +210,7 @@ class ImageTextboxApp:
             self.display_images()
 
     def display_images(self):
-        """アップロードされた画像をすべて表示"""
+        """アップロードされた画像をすべて表示（2列レイアウト）"""
         # プレースホルダーを削除
         if hasattr(self, "placeholder_label"):
             self.placeholder_label.destroy()
@@ -222,43 +222,59 @@ class ImageTextboxApp:
         # 画像参照を保持するリスト（ガベージコレクション防止）
         self.image_references = []
 
+        # 2列レイアウト用の行フレーム
+        current_row_frame = None
+
         # 各画像を表示
         for idx, img_path in enumerate(self.uploaded_images):
             try:
+                # 2列ごとに新しい行フレームを作成
+                if idx % 2 == 0:
+                    current_row_frame = ttk.Frame(self.images_frame)
+                    current_row_frame.pack(fill=tk.X, pady=5)
+
                 # 画像を読み込み
                 img = Image.open(img_path)
 
                 # サムネイルサイズに縮小（アスペクト比を維持）
-                img.thumbnail((300, 300), Image.Resampling.LANCZOS)
+                img.thumbnail((350, 350), Image.Resampling.LANCZOS)
 
                 # PhotoImageに変換
                 photo = ImageTk.PhotoImage(img)
                 self.image_references.append(photo)
 
-                # フレームを作成
+                # フレームを作成（2列配置）
                 img_container = ttk.Frame(
-                    self.images_frame, relief=tk.RIDGE, borderwidth=2
+                    current_row_frame, relief=tk.RIDGE, borderwidth=2
                 )
-                img_container.pack(pady=10, padx=10, fill=tk.X)
+                img_container.pack(side=tk.LEFT, pady=5, padx=5, expand=True)
 
                 # ファイル名ラベル
                 name_label = ttk.Label(
-                    img_container, text=Path(img_path).name, font=("Arial", 10, "bold")
+                    img_container,
+                    text=Path(img_path).name,
+                    font=("Arial", 9, "bold"),
+                    wraplength=330,
                 )
-                name_label.pack(pady=5)
+                name_label.pack(pady=5, padx=5)
 
                 # 画像ラベル
                 img_label = tk.Label(img_container, image=photo, bg="white")
-                img_label.pack(pady=5)
+                img_label.pack(pady=5, padx=5)
 
             except Exception as e:
                 # エラー時は警告を表示
+                if idx % 2 == 0:
+                    error_row = ttk.Frame(self.images_frame)
+                    error_row.pack(fill=tk.X, pady=5)
+                    current_row_frame = error_row
+
                 error_label = ttk.Label(
-                    self.images_frame,
+                    current_row_frame,
                     text=f"エラー: {Path(img_path).name} - {str(e)}",
                     foreground="red",
                 )
-                error_label.pack(pady=5)
+                error_label.pack(side=tk.LEFT, pady=5, padx=5)
 
     def on_start(self):
         """開始ボタンの処理"""
