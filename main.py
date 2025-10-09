@@ -8,7 +8,7 @@ class ImageTextboxApp:
     def __init__(self, root):
         self.root = root
         self.root.title("画像プレビューアプリケーション")
-        self.root.geometry("1200x800")
+        self.root.geometry("1150x450")
 
         # アップロードされた画像のパスを保存
         self.uploaded_images = []
@@ -27,12 +27,9 @@ class ImageTextboxApp:
         # 右側パネル: テキストボックス（画像プレビュー）
         self.setup_right_panel()
 
-        # ステータスバー（下部）
-        self.setup_status_bar()
-
     def setup_left_panel(self):
         # 左側フレーム
-        left_frame = ttk.Frame(self.paned_window, width=400)
+        left_frame = ttk.Frame(self.paned_window, width=200)
         self.paned_window.add(left_frame, weight=1)
 
         # ラベル
@@ -105,10 +102,22 @@ class ImageTextboxApp:
         )
         self.stop_button.pack(side=tk.LEFT, padx=2)
 
+        # ステータス表示フレーム
+        status_frame = ttk.LabelFrame(left_frame, text="ステータス", padding=5)
+        status_frame.pack(
+            fill=tk.BOTH,
+            padx=5,
+            pady=5,
+        )
+        self.status_display = ttk.Label(
+            status_frame, text="準備完了", anchor=tk.W, font=("Arial", 14)
+        )
+        self.status_display.pack(fill=tk.X)
+
     def setup_right_panel(self):
         # 右側フレーム
         right_frame = ttk.Frame(self.paned_window)
-        self.paned_window.add(right_frame, weight=2)
+        self.paned_window.add(right_frame, weight=5)
 
         # ラベル
         label = ttk.Label(
@@ -116,7 +125,7 @@ class ImageTextboxApp:
             text="画像プレビュー（すべての画像）",
             font=("Arial", 10, "bold"),
         )
-        label.pack(pady=5, anchor=tk.W, padx=5)
+        label.pack(pady=5, anchor=tk.W, padx=4)
 
         # 画像プレビューエリア（スクロール可能なキャンバス）
         canvas_frame = ttk.Frame(right_frame)
@@ -159,16 +168,6 @@ class ImageTextboxApp:
         )
         self.placeholder_label.pack(pady=50)
 
-    def setup_status_bar(self):
-        # ステータスバー
-        status_frame = ttk.Frame(self.root, relief=tk.SUNKEN)
-        status_frame.pack(side=tk.BOTTOM, fill=tk.X)
-
-        self.status_label = ttk.Label(
-            status_frame, text="ステータス: 準備完了", anchor=tk.W
-        )
-        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-
     def on_frame_configure(self, event=None):
         """キャンバスのスクロール領域を更新"""
         self.image_canvas.configure(scrollregion=self.image_canvas.bbox("all"))
@@ -176,17 +175,15 @@ class ImageTextboxApp:
     def on_create_folder(self):
         folder_name = self.folder_name_entry.get().strip()
         if folder_name:
-            self.status_label.config(
-                text=f"ステータス: フォルダ '{folder_name}' を作成中..."
-            )
+            self.status_display.config(text=f"フォルダ '{folder_name}' を作成中...")
             # ここで実際のフォルダ作成処理を行う
             try:
                 # 例: Path(folder_name).mkdir(exist_ok=True)
                 messagebox.showinfo("成功", f"フォルダ '{folder_name}' を作成しました")
-                self.status_label.config(text="ステータス: 準備完了")
+                self.status_display.config(text="準備完了")
             except Exception as e:
                 messagebox.showerror("エラー", f"フォルダ作成に失敗しました: {e}")
-                self.status_label.config(text="ステータス: エラー")
+                self.status_display.config(text="エラー")
         else:
             messagebox.showwarning("警告", "フォルダ名を入力してください")
 
@@ -206,8 +203,8 @@ class ImageTextboxApp:
                     # 画像パスを保存
                     self.uploaded_images.append(file_path)
 
-            self.status_label.config(
-                text=f"ステータス: {len(file_paths)}個のファイルをアップロードしました"
+            self.status_display.config(
+                text=f"{len(file_paths)}個のファイルをアップロードしました"
             )
 
             # 画像を表示
@@ -233,7 +230,7 @@ class ImageTextboxApp:
         )
         self.placeholder_label.pack(pady=50)
 
-        self.status_label.config(text="ステータス: リセット完了")
+        self.status_display.config(text="リセット完了")
 
     def display_images(self):
         """アップロードされた画像をすべて表示（2列レイアウト）"""
@@ -263,7 +260,7 @@ class ImageTextboxApp:
                 img = Image.open(img_path)
 
                 # サムネイルサイズに縮小（アスペクト比を維持）
-                img.thumbnail((350, 350), Image.Resampling.LANCZOS)
+                img.thumbnail((325, 325), Image.Resampling.LANCZOS)
 
                 # PhotoImageに変換
                 photo = ImageTk.PhotoImage(img)
@@ -308,7 +305,7 @@ class ImageTextboxApp:
             messagebox.showwarning("警告", "ファイルをアップロードしてください")
             return
 
-        self.status_label.config(text="ステータス: 処理を開始しました")
+        self.status_display.config(text="処理を開始しました")
         self.start_button.config(state=tk.DISABLED)
         self.stop_button.config(state=tk.NORMAL)
 
@@ -317,7 +314,7 @@ class ImageTextboxApp:
 
     def on_stop(self):
         """停止ボタンの処理"""
-        self.status_label.config(text="ステータス: 処理を停止しました")
+        self.status_display.config(text="処理を停止しました")
         self.start_button.config(state=tk.NORMAL)
         self.stop_button.config(state=tk.DISABLED)
 
