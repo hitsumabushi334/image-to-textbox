@@ -64,11 +64,14 @@ class ImageTextboxApp:
 
         # ファイルアップロードボタン
         upload_frame = ttk.Frame(left_frame)
-        upload_frame.pack(fill=tk.X, padx=5, pady=5)
+        upload_frame.pack(fill=tk.BOTH, padx=5, pady=5)
 
         ttk.Button(
             upload_frame, text="ファイルをアップロード", command=self.on_file_upload
-        ).pack(fill=tk.X)
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(upload_frame, text="リセット", command=self.on_reset).pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
 
         # ファイル名一覧フレーム
         file_list_frame = ttk.LabelFrame(left_frame, text="ファイル名一覧", padding=5)
@@ -152,6 +155,7 @@ class ImageTextboxApp:
             self.images_frame,
             text="画像ファイルをアップロードしてください",
             font=("Arial", 12),
+            anchor=tk.CENTER,
         )
         self.placeholder_label.pack(pady=50)
 
@@ -208,6 +212,28 @@ class ImageTextboxApp:
 
             # 画像を表示
             self.display_images()
+
+    def on_reset(self):
+        """リセットボタンの処理"""
+        # ファイルリストをクリア
+        self.file_listbox.delete(0, tk.END)
+        self.uploaded_images.clear()
+
+        # 画像表示エリアをクリア
+        for widget in self.images_frame.winfo_children():
+            widget.destroy()
+
+        self.on_frame_configure()
+
+        # プレースホルダーラベルを再表示
+        self.placeholder_label = ttk.Label(
+            self.images_frame,
+            text="画像ファイルをアップロードしてください",
+            font=("Arial", 12),
+        )
+        self.placeholder_label.pack(pady=50)
+
+        self.status_label.config(text="ステータス: リセット完了")
 
     def display_images(self):
         """アップロードされた画像をすべて表示（2列レイアウト）"""
