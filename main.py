@@ -8,7 +8,7 @@ class ImageTextboxApp:
     def __init__(self, root):
         self.root = root
         self.root.title("画像プレビューアプリケーション")
-        self.root.geometry("1150x450")
+        self.root.geometry("1170x450")
 
         # アップロードされた画像のパスを保存
         self.uploaded_images = []
@@ -29,7 +29,7 @@ class ImageTextboxApp:
 
     def setup_left_panel(self):
         # 左側フレーム
-        left_frame = ttk.Frame(self.paned_window, width=200)
+        left_frame = ttk.Frame(self.paned_window, width=220)
         self.paned_window.add(left_frame, weight=1)
 
         # ラベル
@@ -108,16 +108,17 @@ class ImageTextboxApp:
             fill=tk.BOTH,
             padx=5,
             pady=5,
+            expand=True,
         )
         self.status_display = ttk.Label(
-            status_frame, text="準備完了", anchor=tk.W, font=("Arial", 14)
+            status_frame, text="準備完了", anchor=tk.W, font=("Arial", 12)
         )
         self.status_display.pack(fill=tk.X)
 
     def setup_right_panel(self):
         # 右側フレーム
         right_frame = ttk.Frame(self.paned_window)
-        self.paned_window.add(right_frame, weight=5)
+        self.paned_window.add(right_frame, weight=3)
 
         # ラベル
         label = ttk.Label(
