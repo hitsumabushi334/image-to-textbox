@@ -375,6 +375,9 @@ class ImageTextboxApp:
             return task_list
         except FileNotFoundError:
             print("File not found. Please check the file path.")
+            messagebox.showerror(
+                "エラー", "ファイルが見つかりません。パスを確認してください。"
+            )
         return []
 
     # gemini apiの画像認識を使ったテキスト抽出
@@ -403,6 +406,7 @@ class ImageTextboxApp:
                 return []
         except Exception as e:
             logger.error(f"Error during text extraction: {e}")
+            messagebox.showerror("エラー", f"テキスト抽出中にエラーが発生しました: {e}")
             return []
 
     def on_start(self):
