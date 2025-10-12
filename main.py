@@ -30,6 +30,14 @@ class ImageTextboxApp:
         # Gemini APIクライアントの初期化
         self.client = genai.Client(api_key=config_ini["GEMINI"]["api_key"])
 
+        if (
+            config_ini["GEMINI"]["api_key"] is None
+            or config_ini["GEMINI"]["api_key"] == ""
+        ):
+            logger.warning(
+                "GEMINI APIキーが設定されていません。APIキーを設定してください。"
+            )
+
         # アップロードされた画像のパスを保存
         self.uploaded_images = []
 
