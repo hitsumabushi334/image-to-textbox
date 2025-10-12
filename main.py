@@ -1,4 +1,4 @@
-from operator import indexOf
+from operator import ge, indexOf
 import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from config import config_ini
 import logging
 from logging import StreamHandler, getLogger, Formatter
+from get_prompt import get_system_instructions
 
 # ロギング設定
 logger = getLogger(__name__)
@@ -46,6 +47,10 @@ class ImageTextboxApp:
         self.uploaded_images = []
 
         self.gemini_model = config_ini["GEMINI"]["model"] or "gemini-2.5-flash"
+        self.system_instruction = (
+            get_system_instructions()
+            or "You are a helpful assistant that extracts text from images."
+        )
 
         # メインコンテナ
         self.setup_ui()
@@ -355,6 +360,7 @@ class ImageTextboxApp:
     def extract_text(self, files):
 
         class figure_token(BaseModel):
+            figure_name: str
             token: list[str]
 
         reasons = self.client.models.generate_content(
