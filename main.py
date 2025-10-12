@@ -1,3 +1,4 @@
+import json
 import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -383,17 +384,26 @@ class ImageTextboxApp:
             figure_name: str
             token: list[str]
 
-        response = self.client.models.generate_content(
-            model=self.gemini_model,
-            config=types.GenerateContentConfig(
-                system_instruction=self.system_instruction,
-                response_mime_type="application/json",
-                response_schema=list[figure_token],
-            ),
-            contents=[*files, "添付した画像について処理を行ってください。"],
-        )
-
-        return response.text
+        try:
+            response = self.client.models.generate_content(
+                model=self.gemini_model,
+                config=types.GenerateContentConfig(
+                    system_instruction=self.system_instruction,
+                    response_mime_type="application/json",
+                    response_schema=list[figure_token],
+                ),
+                contents=[*files, "添付した画像について処理を行ってください。"],
+            )
+            if response.text is not None:
+                json_response = json.loads(response.text)
+                logger.info("Text extraction successful")
+                return json_response
+            else:
+                logger.error("No response text received from Gemini API.")
+                return []
+        except Exception as e:
+            logger.error(f"Error during text extraction: {e}")
+            return []
 
     def on_start(self):
         """開始ボタンの処理"""
