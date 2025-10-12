@@ -2,6 +2,9 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from PIL import Image, ImageTk
+from google import genai
+from google.genai import types
+import asyncio
 
 
 class ImageTextboxApp:
@@ -9,6 +12,9 @@ class ImageTextboxApp:
         self.root = root
         self.root.title("画像プレビューアプリケーション")
         self.root.geometry("1170x450")
+
+        # Gemini APIクライアントの初期化
+        self.client = genai.Client(api_key="YOUR_API_KEY_HERE")
 
         # アップロードされた画像のパスを保存
         self.uploaded_images = []
@@ -299,6 +305,17 @@ class ImageTextboxApp:
                     foreground="red",
                 )
                 error_label.pack(side=tk.LEFT, pady=5, padx=5)
+
+    # gemini apiのファイルAPIを使った画像のアップロード
+    def file_upload_to_gemini(self):
+        try:
+            files = []
+            for img_path in self.uploaded_images:
+                files.append(self.client.files.upload(file=img_path))
+            return files
+        except Exception as e:
+            messagebox.showerror("エラー", f"ファイルアップロードに失敗しました: {e}")
+            return None
 
     def on_start(self):
         """開始ボタンの処理"""
