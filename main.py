@@ -21,7 +21,7 @@ logger.addHandler(stream_handler)
 
 
 class ImageTextboxApp:
-    def __init__(self, root):
+    def __init__(self, root, config_ini):
         self.root = root
         self.root.title("画像プレビューアプリケーション")
 
@@ -360,7 +360,7 @@ class ImageTextboxApp:
 
 def main():
     root = tk.Tk()
-    app = ImageTextboxApp(root)
+    app = ImageTextboxApp(root, config_ini)
     root.mainloop()
 
 
