@@ -383,13 +383,17 @@ class ImageTextboxApp:
             figure_name: str
             token: list[str]
 
-        reasons = self.client.models.generate_content(
+        response = self.client.models.generate_content(
             model=self.gemini_model,
             config=types.GenerateContentConfig(
-                system_instruction=self.system_instruction
+                system_instruction=self.system_instruction,
+                response_mime_type="application/json",
+                response_schema=list[figure_token],
             ),
             contents=[*files, "添付した画像について処理を行ってください。"],
         )
+
+        return response.text
 
     def on_start(self):
         """開始ボタンの処理"""
