@@ -1,3 +1,5 @@
+from cgitb import handler
+from re import S
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
@@ -6,9 +8,18 @@ from google import genai
 from google.genai import types
 from config import config_ini
 import logging
+from logging import StreamHandler
 
-logging.basicConfig(level=logging.INFO)
+# ロギング設定
 logger = logging.getLogger(__name__)
+
+stream_handler = StreamHandler()
+stream_handler.setLevel(logging.INFO)
+
+handler_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+stream_handler.setFormatter(handler_format)
+
+logger.addHandler(stream_handler)
 
 
 class ImageTextboxApp:
