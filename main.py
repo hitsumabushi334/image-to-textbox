@@ -1,4 +1,3 @@
-from operator import ge, indexOf
 import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -11,6 +10,7 @@ from config import config_ini
 import logging
 from logging import StreamHandler, getLogger, Formatter
 from get_prompt import get_system_instructions
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ロギング設定
 logger = getLogger(__name__)
@@ -344,17 +344,37 @@ class ImageTextboxApp:
     # gemini apiのファイルAPIを使った画像のアップロード
     def file_upload_to_gemini(self):
         try:
-            files = []
-            for img_path in self.uploaded_images:
-                files.append(self.client.files.upload(file=img_path))
-                logger.info(
-                    f"ファイルをアップロードしました: {indexOf(self.uploaded_images, img_path)}/{len(self.uploaded_images)} {img_path}"
-                )
-            return files
-        except Exception as e:
-            messagebox.showerror("エラー", f"ファイルアップロードに失敗しました: {e}")
-            logger.error(f"ファイルアップロードに失敗しました: {e}")
-            return []
+            # test_images内のファイル名を取得
+            test_images_dir = os.path.join(os.path.dirname(__file__), "test_images")
+            file_list = os.listdir(test_images_dir)
+            file_paths = [
+                os.path.join(test_images_dir, file_name) for file_name in file_list
+            ]
+
+            # 並列アップロード（最大10スレッド）
+            task_list = []
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                # アップロードタスクを投入
+                futures = {
+                    executor.submit(self.client.files.upload, file=file_path): file_path
+                    for file_path in file_paths
+                }
+
+                # 完了したものから結果を取得
+                for future in as_completed(futures):
+                    file_path = futures[future]
+                    try:
+                        result = future.result()
+                        task_list.append(result)
+                        print(f"Uploaded: {os.path.basename(file_path)}")
+                    except Exception as e:
+                        print(f"Error uploading {file_path}: {e}")
+
+            print(f"Total uploaded: {len(task_list)} files")
+            return task_list
+        except FileNotFoundError:
+            print("File not found. Please check the file path.")
+        return []
 
     # gemini apiの画像認識を使ったテキスト抽出
     def extract_text(self, files):
@@ -366,8 +386,7 @@ class ImageTextboxApp:
         reasons = self.client.models.generate_content(
             model=self.gemini_model,
             config=types.GenerateContentConfig(
-                system_instruction=self.config_ini["GEMINI"]["system_instruction"]
-                or "You are a helpful assistant that extracts text from images.",
+                system_instruction=self.system_instruction
             ),
             contents=[*files, "添付した画像について処理を行ってください。"],
         )
