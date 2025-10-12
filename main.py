@@ -1,9 +1,12 @@
+from operator import indexOf
+import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from PIL import Image, ImageTk
 from google import genai
 from google.genai import types
+from pydantic import BaseModel
 from config import config_ini
 import logging
 from logging import StreamHandler, getLogger, Formatter
@@ -24,6 +27,7 @@ class ImageTextboxApp:
     def __init__(self, root, config_ini):
         self.root = root
         self.root.title("画像プレビューアプリケーション")
+        self.config_ini = config_ini
 
         self.root.geometry(config_ini["GUI_SETTINGS"]["window_size"] or "1170x450")
 
@@ -87,7 +91,7 @@ class ImageTextboxApp:
 
         ttk.Label(model_frame, text="モデル名:").pack(side=tk.LEFT, padx=(0, 5))
         self.model_name_label = ttk.Label(
-            model_frame, text="GPT-4", relief=tk.SUNKEN, width=25, anchor=tk.W
+            model_frame, text=self.gemini_model, relief=tk.SUNKEN, width=25, anchor=tk.W
         )
         self.model_name_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
@@ -338,15 +342,37 @@ class ImageTextboxApp:
             files = []
             for img_path in self.uploaded_images:
                 files.append(self.client.files.upload(file=img_path))
+                logger.info(
+                    f"ファイルをアップロードしました: {indexOf(self.uploaded_images, img_path)}/{len(self.uploaded_images)} {img_path}"
+                )
             return files
         except Exception as e:
             messagebox.showerror("エラー", f"ファイルアップロードに失敗しました: {e}")
-            return None
+            logger.error(f"ファイルアップロードに失敗しました: {e}")
+            return []
+
+    # gemini apiの画像認識を使ったテキスト抽出
+    def extract_text(self, files):
+
+        class figure_token(BaseModel):
+            token: list[str]
+
+        reasons = self.client.models.generate_content(
+            model=self.gemini_model,
+            config=types.GenerateContentConfig(
+                system_instruction=self.config_ini["GEMINI"]["system_instruction"]
+                or "You are a helpful assistant that extracts text from images.",
+            ),
+            contents=[*files, "添付した画像について処理を行ってください。"],
+        )
 
     def on_start(self):
         """開始ボタンの処理"""
         if self.file_listbox.size() == 0:
             messagebox.showwarning("警告", "ファイルをアップロードしてください")
+            logger.warning(
+                "ファイルがアップロードされていません。処理を開始できません。"
+            )
             return
 
         self.status_display.config(text="処理を開始しました")
@@ -368,6 +394,9 @@ class ImageTextboxApp:
 
 def main():
     root = tk.Tk()
+    icon_name = config_ini["GUI_SETTINGS"]["icon_name"] or "favicon.ico"
+    icon_path = os.path.join(os.path.dirname(__file__), icon_name)
+    root.iconbitmap(default=icon_path)
     app = ImageTextboxApp(root, config_ini)
     root.mainloop()
 
