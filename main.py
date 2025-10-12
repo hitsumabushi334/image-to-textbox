@@ -4,20 +4,27 @@ from pathlib import Path
 from PIL import Image, ImageTk
 from google import genai
 from google.genai import types
-import asyncio
+from config import config_ini
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class ImageTextboxApp:
     def __init__(self, root):
         self.root = root
         self.root.title("画像プレビューアプリケーション")
-        self.root.geometry("1170x450")
+
+        self.root.geometry(config_ini["GUI_SETTINGS"]["window_size"] or "1170x450")
 
         # Gemini APIクライアントの初期化
-        self.client = genai.Client(api_key="YOUR_API_KEY_HERE")
+        self.client = genai.Client(api_key=config_ini["GEMINI"]["api_key"])
 
         # アップロードされた画像のパスを保存
         self.uploaded_images = []
+
+        self.gemini_model = config_ini["GEMINI"]["model"] or "gemini-2.5-flash"
 
         # メインコンテナ
         self.setup_ui()
@@ -32,6 +39,8 @@ class ImageTextboxApp:
 
         # 右側パネル: テキストボックス（画像プレビュー）
         self.setup_right_panel()
+
+        logger.info("UI setup complete")
 
     def setup_left_panel(self):
         # 左側フレーム
