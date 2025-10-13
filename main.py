@@ -17,9 +17,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 logger = getLogger(__name__)
 
 stream_handler = StreamHandler()
-stream_handler.setLevel(logging.INFO)
+logging_level = config_ini.get("LOGGING", "log-level", fallback="INFO").upper()
+stream_handler.setLevel(logging_level)
 
-handler_format = Formatter("%(asctime)s - %(levelname)s - %(message)s")
+handler_format = Formatter(
+    config_ini.get(
+        "LOGGING",
+        "format",
+        fallback="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+)
 stream_handler.setFormatter(handler_format)
 
 logger.addHandler(stream_handler)
@@ -344,70 +351,60 @@ class ImageTextboxApp:
 
     # gemini apiのファイルAPIを使った画像のアップロード
     def file_upload_to_gemini(self):
-        try:
-            # test_images内のファイル名を取得
-            test_images_dir = os.path.join(os.path.dirname(__file__), "test_images")
-            file_list = os.listdir(test_images_dir)
-            file_paths = [
-                os.path.join(test_images_dir, file_name) for file_name in file_list
-            ]
+        """例外を親関数に伝播させる"""
+        if not self.uploaded_images:
+            logger.warning("アップロードする画像がありません")
+            raise ValueError("アップロードする画像がありません")
 
-            # 並列アップロード（最大10スレッド）
-            task_list = []
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                # アップロードタスクを投入
-                futures = {
-                    executor.submit(self.client.files.upload, file=file_path): file_path
-                    for file_path in file_paths
-                }
+        # 並列アップロード（最大10スレッド）
+        task_list = []
+        total_files = len(self.uploaded_images)
 
-                # 完了したものから結果を取得
-                for future in as_completed(futures):
-                    file_path = futures[future]
-                    try:
-                        result = future.result()
-                        task_list.append(result)
-                        print(f"Uploaded: {os.path.basename(file_path)}")
-                    except Exception as e:
-                        print(f"Error uploading {file_path}: {e}")
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {
+                executor.submit(self.client.files.upload, file=file_path): file_path
+                for file_path in self.uploaded_images
+            }
 
-            print(f"Total uploaded: {len(task_list)} files")
-            return task_list
-        except FileNotFoundError:
-            print("File not found. Please check the file path.")
-            messagebox.showerror(
-                "エラー", "ファイルが見つかりません。パスを確認してください。"
-            )
-        return []
+            for future in as_completed(futures):
+                file_path = futures[future]
+                result = future.result()  # 例外はここで発生（親に伝播）
+                task_list.append(result)
+                logger.info(f"Uploaded: {os.path.basename(file_path)}")
+                self.status_display.config(
+                    text=f"アップロード中: {len(task_list)}/{total_files}"
+                )
+                self.root.update_idletasks()
 
-    # gemini apiの画像認識を使ったテキスト抽出
+        logger.info(f"Total uploaded: {len(task_list)} files")
+        return task_list
+
     def extract_text(self, files):
+        """例外を親関数に伝播させる"""
 
         class figure_token(BaseModel):
             figure_name: str
             token: list[str]
 
-        try:
-            response = self.client.models.generate_content(
-                model=self.gemini_model,
-                config=types.GenerateContentConfig(
-                    system_instruction=self.system_instruction,
-                    response_mime_type="application/json",
-                    response_schema=list[figure_token],
-                ),
-                contents=[*files, "添付した画像について処理を行ってください。"],
-            )
-            if response.text is not None:
-                json_response = json.loads(response.text)
-                logger.info("Text extraction successful")
-                return json_response
-            else:
-                logger.error("No response text received from Gemini API.")
-                return []
-        except Exception as e:
-            logger.error(f"Error during text extraction: {e}")
-            messagebox.showerror("エラー", f"テキスト抽出中にエラーが発生しました: {e}")
-            return []
+        logger.info("Starting text extraction")
+        self.status_display.config(text="テキスト抽出中...")
+
+        response = self.client.models.generate_content(
+            model=self.gemini_model,
+            config=types.GenerateContentConfig(
+                system_instruction=self.system_instruction,
+                response_mime_type="application/json",
+                response_schema=list[figure_token],
+            ),
+            contents=[*files, "添付した画像について処理を行ってください。"],
+        )
+
+        if response.text is None:
+            raise ValueError("No response text received from Gemini API")
+
+        json_response = json.loads(response.text)  # 例外はここで発生（親に伝播）
+        logger.info("Text extraction successful")
+        return json_response
 
     def on_start(self):
         """開始ボタンの処理"""
@@ -423,7 +420,18 @@ class ImageTextboxApp:
         self.stop_button.config(state=tk.NORMAL)
 
         # ここで実際の処理を開始
-        messagebox.showinfo("開始", "処理を開始しました")
+        try:
+            messagebox.showinfo("開始", "処理を開始しました")
+        except ValueError as ve:
+            messagebox.showerror("エラー", f"処理中にエラーが発生しました: {ve}")
+            logger.error(f"ValueError during processing: {ve}")
+        except Exception as e:
+            messagebox.showerror(
+                "エラー", f"処理中に予期しないエラーが発生しました: {e}"
+            )
+            logger.error(f"Unexpected error during processing: {e}")
+        finally:
+            self.on_finish()
 
     def on_stop(self):
         """停止ボタンの処理"""
@@ -433,12 +441,20 @@ class ImageTextboxApp:
 
         # ここで実際の処理を停止
         messagebox.showinfo("停止", "処理を停止しました")
+        self.status_display.config(text="準備完了")
+
+    def on_finish(self):
+        """処理完了時の共通処理"""
+        self.start_button.config(state=tk.NORMAL)
+        self.stop_button.config(state=tk.DISABLED)
+        self.status_display.config(text="準備完了")
+        messagebox.showinfo("完了", "処理が完了しました")
 
 
 def main():
     root = tk.Tk()
     icon_name = config_ini["GUI_SETTINGS"]["icon_name"] or "favicon.ico"
-    icon_path = os.path.join(os.path.dirname(__file__), icon_name)
+    icon_path = os.path.join(os.path.dirname(__file__), "config", icon_name)
     root.iconbitmap(default=icon_path)
     app = ImageTextboxApp(root, config_ini)
     root.mainloop()
