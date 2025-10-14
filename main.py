@@ -14,7 +14,11 @@ from get_prompt import get_system_instructions
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ロギング設定
+output_file = config_ini.get("LOGGING", "log_file", fallback="app.log")
+encoding = config_ini.get("LOGGING", "encoding", fallback="utf-8")
+logging.basicConfig(filename=output_file, encoding=encoding)
 logger = getLogger(__name__)
+
 
 stream_handler = StreamHandler()
 logging_level = config_ini.get("LOGGING", "log-level", fallback="INFO").upper()
