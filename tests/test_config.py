@@ -18,6 +18,12 @@ def config_params():
             "window_size": "1170x450",
             "icon_name": "image-to-textbox.ico",
         },
+        "LOGGING": {
+            "log_file": "app.log",
+            "log-level": "INFO",
+            "encoding": "utf-8",
+            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        },
     }
 
 
@@ -43,7 +49,19 @@ class TestConfig:
             == config_params["GUI_SETTINGS"]["icon_name"]
         )
 
+    def test_logging_section(self, config, config_params):
+        assert "LOGGING" in config
+        assert "log_file" in config["LOGGING"]
+        assert config["LOGGING"]["log_file"] == config_params["LOGGING"]["log_file"]
+        assert "log-level" in config["LOGGING"]
+        assert config["LOGGING"]["log-level"] == config_params["LOGGING"]["log-level"]
+        assert "encoding" in config["LOGGING"]
+        assert config["LOGGING"]["encoding"] == config_params["LOGGING"]["encoding"]
+        assert "format" in config["LOGGING"]
+        assert config["LOGGING"]["format"] == config_params["LOGGING"]["format"]
+
     def test_no_extra_sections(self, config, config_params):
         assert len(config.sections()) == len(config_params)
         assert len(config["GEMINI"]) == len(config_params["GEMINI"])
         assert len(config["GUI_SETTINGS"]) == len(config_params["GUI_SETTINGS"])
+        assert len(config["LOGGING"]) == len(config_params["LOGGING"])

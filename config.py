@@ -3,7 +3,7 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent  # この.pyがある場所
 cfg_path = BASE / "config" / "Config.ini"  # 例: 1つ上のconfig/Config.ini
-config_ini = configparser.ConfigParser()
+config_ini = configparser.ConfigParser(interpolation=None)
 
 if cfg_path.exists():
     config_ini.read(cfg_path, encoding="utf-8")
