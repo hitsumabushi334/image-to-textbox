@@ -390,6 +390,9 @@ class ImageTextboxApp:
             figure_name: str
             token: list[str]
 
+        if not files:
+            logger.warning("テキスト抽出のためのファイルがありません")
+            raise ValueError("テキスト抽出のためのファイルがありません")
         logger.info("Starting text extraction")
         self.status_display.config(text="テキスト抽出中...")
 

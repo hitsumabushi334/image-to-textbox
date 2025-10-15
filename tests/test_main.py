@@ -26,15 +26,16 @@ class MockConfigParser:
             return fallback
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def root():
+    """クラスごとに1回だけTkinterのルートウィンドウを作成"""
     root = tk.Tk()
     yield root
     root.destroy()
 
 
 # 共通の設定パラメータ
-@pytest.fixture
+@pytest.fixture(scope="class")
 def config_params():
     return {
         "GEMINI": {
@@ -55,7 +56,7 @@ def config_params():
 
 
 # テスト用の設定ファイルのモック
-@pytest.fixture
+@pytest.fixture(scope="class")
 def test_config_ini(config_params):
     """ConfigParserのように振る舞う設定ファイルのモック"""
     return MockConfigParser(config_params)
@@ -71,7 +72,7 @@ def mock_root():
 # 目的: アプリのロジックをテスト（APIの動作は検証しない）
 # 必要な振る舞い: メソッド呼び出しと戻り値のみ
 # genai.Clientのモック
-@pytest.fixture
+@pytest.fixture(scope="class")
 def mock_genai_client():
     with patch("main.genai.Client") as MockClient:
         mock_instance = Mock()
@@ -88,7 +89,10 @@ def mock_genai_client():
             mock_response.text = json.dumps(
                 [{"figure_name": "test.jpg", "token": ["sample", "text"]}]
             )
-            return mock_response
+            if contents and "no_response" in contents:
+                return None
+            else:
+                return mock_response
 
         # generate_contentと同じキーワード引数を持つモック
         # return_valueを使うことで、mock_responseを返すようにする
@@ -109,7 +113,7 @@ def system_instructions():
     return get_system_instructions()
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def app(root, test_config_ini, mock_genai_client):
     """クラスごとに1回だけアプリを作成"""
     with patch("main.genai.Client"):
@@ -119,13 +123,51 @@ def app(root, test_config_ini, mock_genai_client):
     # root.destroy() は root fixture が担当するので不要
 
 
+@pytest.fixture(autouse=True, scope="function")
+def reset_mocks_and_state(request):
+    """各テストの後でモックと状態をリセット"""
+    # テスト実行前: 何もしない
+    yield
+
+    # テスト実行後: モックと状態をリセット
+    # scope="class"のフィクスチャを安全に取得してリセット
+    try:
+        if "mock_genai_client" in request.fixturenames:
+            mock_client = request.getfixturevalue("mock_genai_client")
+            mock_client.files.upload.reset_mock()
+            mock_client.models.generate_content.reset_mock()
+
+        if "app" in request.fixturenames:
+            app = request.getfixturevalue("app")
+            if hasattr(app, "uploaded_images"):
+                app.uploaded_images = []
+    except Exception:
+        # フィクスチャが利用できない場合はスキップ
+        pass
+
+
 @pytest.fixture
 def app_with_mock_client(mock_root, test_config_ini, mock_genai_client):
+    """UI無しのアプリ（TestImageTextboxApp用）"""
     with patch("main.genai.Client"), patch.object(ImageTextboxApp, "setup_ui"):
         app = ImageTextboxApp(mock_root, test_config_ini)
         app.client = mock_genai_client
         yield app
-    return app
+
+
+@pytest.fixture(scope="class")
+def app_for_api_tests(test_config_ini, mock_genai_client):
+    """TestGeminiCall用: UI無しでAPIロジックのみテスト"""
+    mock_root = Mock(spec=tk.Tk)
+    with patch("main.genai.Client"), patch.object(ImageTextboxApp, "setup_ui"):
+        app = ImageTextboxApp(mock_root, test_config_ini)
+        app.client = mock_genai_client
+
+        # UI要素をモックとして追加（file_upload_to_geminiで使われる）
+        app.status_display = Mock()
+        app.status_display.config = Mock()
+
+        yield app
 
 
 test_file_path_list = [
@@ -213,50 +255,54 @@ class TestImageTextboxApp:
 
 
 class TestGeminiCall:
-    def test_file_upload_to_gemini_success(self, app):
+    def test_file_upload_to_gemini_success(self, app_for_api_tests):
         """file_upload_to_geminiメソッドが正しい引数で呼ばれることを確認"""
-        app.uploaded_images = test_file_path_list
-        app.file_upload_to_gemini()
+        app_for_api_tests.uploaded_images = test_file_path_list
+        app_for_api_tests.file_upload_to_gemini()
 
         # files.upload()が画像の数だけ呼ばれたことを確認
-        assert app.client.files.upload.call_count == len(test_file_path_list)
+        assert app_for_api_tests.client.files.upload.call_count == len(
+            test_file_path_list
+        )
 
         # 各画像ファイルに対して正しい引数で呼ばれたことを確認
         for i, file_path in enumerate(test_file_path_list):
-            called_args, called_kwargs = app.client.files.upload.call_args_list[i]
+            called_args, called_kwargs = (
+                app_for_api_tests.client.files.upload.call_args_list[i]
+            )
             assert called_kwargs.get("file") == file_path or (
                 len(called_args) > 0 and called_args[0] == file_path
             )
 
     # test_file_upload_to_geminiをファイルを与えずに呼び出したときのテスト。
-    def test_file_upload_to_gemini_no_files(self, app):
+    def test_file_upload_to_gemini_no_files(self, app_for_api_tests):
         """file_upload_to_geminiメソッドがファイル無しで呼ばれたときの挙動を確認"""
-        app.uploaded_images = []  # ファイル無し
+        app_for_api_tests.uploaded_images = []  # ファイル無し
 
         # ValueErrorが発生することを確認
         with pytest.raises(ValueError, match="アップロードする画像がありません"):
-            app.file_upload_to_gemini()
+            app_for_api_tests.file_upload_to_gemini()
 
         # files.upload()が一度も呼ばれていないことを確認
-        app.client.files.upload.assert_not_called()
+        app_for_api_tests.client.files.upload.assert_not_called()
 
-    def test_extract_text(self, app, mock_genai_client):
+    def test_extract_text(self, app_for_api_tests, mock_genai_client):
         """extract_textメソッドが正しい引数で呼ばれることを確認"""
-        app.uploaded_images = test_file_path_list
-        files = app.file_upload_to_gemini()  # まず画像をアップロード
+        app_for_api_tests.uploaded_images = test_file_path_list
+        files = app_for_api_tests.file_upload_to_gemini()  # まず画像をアップロード
 
         # extract_textを呼び出し
-        results = app.extract_text(files)
+        results = app_for_api_tests.extract_text(files)
 
         # models.generate_contentが1回だけ呼ばれたことを確認
         assert mock_genai_client.models.generate_content.call_count == 1
         # 呼び出し時の引数を確認
         called_args, called_kwargs = mock_genai_client.models.generate_content.call_args
-        assert called_kwargs.get("model") == app.gemini_model
+        assert called_kwargs.get("model") == app_for_api_tests.gemini_model
         assert "contents" in called_kwargs
         assert isinstance(called_kwargs["contents"], list)
         assert (
-            len(called_kwargs["contents"]) == len(app.uploaded_images) + 1
+            len(called_kwargs["contents"]) == len(app_for_api_tests.uploaded_images) + 1
         )  # 画像+プロンプト
         assert "config" in called_kwargs
         assert isinstance(called_kwargs["config"], type(called_kwargs["config"]))
@@ -270,3 +316,14 @@ class TestGeminiCall:
             assert "figure_name" in item
             assert "token" in item
             assert isinstance(item["token"], list)
+
+    def test_extract_text_no_files(self, app_for_api_tests):
+        """extract_textメソッドがファイル無しで呼ばれたときの挙動を確認"""
+        # 空のファイルリストを渡す
+        files = []
+
+        # ValueErrorが発生することを確認
+        with pytest.raises(
+            ValueError, match="テキスト抽出のためのファイルがありません"
+        ):
+            app_for_api_tests.extract_text(files)
