@@ -83,13 +83,26 @@ def mock_genai_client():
         mock_file.uri = "gs://test/path"
         mock_instance.files.upload.return_value = mock_file
 
-        # 2. models.generate_content のモック（シンプル）
+        # 2. models.generate_content のモック(シンプル)
         mock_response = Mock()
         mock_response.text = json.dumps(
             [{"figure_name": "test.jpg", "token": ["sample", "text"]}]
         )
-        mock_instance.models.generate_content.return_value = mock_response
 
+        # generate_contentと同じキーワード引数を持つモック関数
+        def mock_generate_content(model=None, contents=None, config=None):
+            """
+            実際のgenerate_contentと同じキーワード引数を受け取るモック
+            Args:
+                model (str): 使用するモデル名 (例: "gemini-2.5-pro")
+                contents (list): リクエストの内容 (ファイルとプロンプト)
+                config (dict): 生成設定
+            Returns:
+                Mock: mock_responseオブジェクト
+            """
+            return mock_response
+
+        mock_instance.models.generate_content = mock_generate_content
         yield MockClient
 
 
@@ -106,10 +119,11 @@ def system_instructions():
 
 
 @pytest.fixture
-def app(root, test_config_ini):
+def app(root, test_config_ini, mock_genai_client):
     """クラスごとに1回だけアプリを作成"""
     with patch("main.genai.Client"):
         app = ImageTextboxApp(root, test_config_ini)
+        app.client = mock_genai_client
         yield app
     # root.destroy() は root fixture が担当するので不要
 
@@ -207,20 +221,30 @@ class TestImageTextboxApp:
         app_with_mock_client.root.geometry.assert_called_once_with("1170x450")
 
 
-class test_gemini_call:
-    def test_file_upload_to_gemini(self, app_with_mock_client, test_file_path_list):
-        """file_upload_to_geminiメソッドが正しい引数で1回呼ばれることを確認"""
-        for file_path in test_file_path_list:
-            app_with_mock_client.file_upload_to_gemini(file_path)
+class TestGeminiCall:
+    def test_file_upload_to_gemini_success(self, app):
+        """file_upload_to_geminiメソッドが正しい引数で呼ばれることを確認"""
+        app.uploaded_images = test_file_path_list
+        app.file_upload_to_gemini()
 
-            # files.upload()が1回だけ呼ばれたことを確認
-            app_with_mock_client.gemini_client.files.upload.assert_called_once()
+        # files.upload()が画像の数だけ呼ばれたことを確認
+        assert app.client.files.upload.call_count == len(test_file_path_list)
 
-            # 正しい引数で呼ばれたことを確認
-            called_args, called_kwargs = (
-                app_with_mock_client.gemini_client.files.upload.call_args
+        # 各画像ファイルに対して正しい引数で呼ばれたことを確認
+        for i, file_path in enumerate(test_file_path_list):
+            called_args, called_kwargs = app.client.files.upload.call_args_list[i]
+            assert called_kwargs.get("file") == file_path or (
+                len(called_args) > 0 and called_args[0] == file_path
             )
-            assert called_args[0] == file_path
 
-            # モックの呼び出し履歴をリセットして次のループへ
-            app_with_mock_client.gemini_client.files.upload.reset_mock()
+    # test_file_upload_to_geminiをファイルを与えずに呼び出したときのテスト。
+    def test_file_upload_to_gemini_no_files(self, app):
+        """file_upload_to_geminiメソッドがファイル無しで呼ばれたときの挙動を確認"""
+        app.uploaded_images = []  # ファイル無し
+
+        # ValueErrorが発生することを確認
+        with pytest.raises(ValueError, match="アップロードする画像がありません"):
+            app.file_upload_to_gemini()
+
+        # files.upload()が一度も呼ばれていないことを確認
+        app.client.files.upload.assert_not_called()
