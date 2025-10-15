@@ -61,6 +61,13 @@ def test_config_ini(config_params):
     return MockConfigParser(config_params)
 
 
+@pytest.fixture
+def mock_root():
+    """tk.Tkのモック"""
+    mock_root = Mock(spec=tk.Tk)
+    return mock_root
+
+
 # 目的: アプリのロジックをテスト（APIの動作は検証しない）
 # 必要な振る舞い: メソッド呼び出しと戻り値のみ
 # genai.Clientのモック
@@ -100,15 +107,34 @@ def system_instructions():
 
 @pytest.fixture
 def app(root, test_config_ini):
+    """クラスごとに1回だけアプリを作成"""
     with patch("main.genai.Client"):
         app = ImageTextboxApp(root, test_config_ini)
+        yield app
+    # root.destroy() は root fixture が担当するので不要
+
+
+@pytest.fixture
+def app_with_mock_client(mock_root, test_config_ini, mock_genai_client):
+    with patch("main.genai.Client"), patch.object(ImageTextboxApp, "setup_ui"):
+        app = ImageTextboxApp(mock_root, test_config_ini)
+        app.client = mock_genai_client
         yield app
     return app
 
 
+test_file_path_list = [
+    "tests/test_image1.jpg",
+    "tests/test_image2.png",
+    "tests/test_image3.gif",
+    "tests/test_image4.bmp",
+    "tests/test_image5.tiff",
+]
+
+
 # GUIインスタンスの初期化テスト
 class TestImageTextboxApp:
-    def test_app_ui(self, app, test_config_ini):
+    def test_app_ui(self, app):
         """アプリケーションの初期化が正しく行われることを確認"""
         assert app is not None
         assert app.root is not None
@@ -134,3 +160,67 @@ class TestImageTextboxApp:
         assert isinstance(app.status_display, ttk.Label)
         assert isinstance(app.image_canvas, tk.Canvas)
         assert isinstance(app.images_frame, ttk.Frame)
+
+    def test_app_initialize(self, app_with_mock_client, test_config_ini):
+        """アプリケーションの初期化が正しく行われることを確認"""
+        # 設定ファイルの内容が正しく読み込まれていることを確認
+        assert app_with_mock_client.config_ini == test_config_ini
+        assert app_with_mock_client.gemini_model == test_config_ini["GEMINI"]["model"]
+        assert app_with_mock_client.uploaded_images == []
+        assert (
+            app_with_mock_client.system_instruction is not None
+        )  # get_system_instructions()の結果
+
+    def test_window_geometry_configuration(self, app_with_mock_client, test_config_ini):
+        """root.geometry()が正しい引数で1回呼ばれることを確認"""
+
+        # geometry()が1回だけ呼ばれたことを確認
+        app_with_mock_client.root.geometry.assert_called_once()
+
+        # 正しい引数で呼ばれたことを確認
+        expected_size = test_config_ini["GUI_SETTINGS"]["window_size"]
+        app_with_mock_client.root.geometry.assert_called_with(expected_size)
+
+    def test_window_geometry_with_fallback(self, app_with_mock_client):
+        """window_sizeがNoneの場合、デフォルト値が使用されることを確認"""
+        # window_sizeがNoneの設定
+        config_with_none = MockConfigParser(
+            {
+                "GEMINI": {
+                    "api_key": "test_key",
+                    "model": "gemini-2.5-pro",
+                },
+                "GUI_SETTINGS": {
+                    "window_size": None,
+                    "icon_name": "test.ico",
+                },
+                "LOGGING": {
+                    "log_file": "app.log",
+                    "log-level": "INFO",
+                    "encoding": "utf-8",
+                    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                },
+            }
+        )
+
+        # デフォルト値"1170x450"で呼ばれたことを確認
+        app_with_mock_client.root.geometry.assert_called_once_with("1170x450")
+
+
+class test_gemini_call:
+    def test_file_upload_to_gemini(self, app_with_mock_client, test_file_path_list):
+        """file_upload_to_geminiメソッドが正しい引数で1回呼ばれることを確認"""
+        for file_path in test_file_path_list:
+            app_with_mock_client.file_upload_to_gemini(file_path)
+
+            # files.upload()が1回だけ呼ばれたことを確認
+            app_with_mock_client.gemini_client.files.upload.assert_called_once()
+
+            # 正しい引数で呼ばれたことを確認
+            called_args, called_kwargs = (
+                app_with_mock_client.gemini_client.files.upload.call_args
+            )
+            assert called_args[0] == file_path
+
+            # モックの呼び出し履歴をリセットして次のループへ
+            app_with_mock_client.gemini_client.files.upload.reset_mock()
