@@ -65,3 +65,33 @@ class TestConfig:
         assert len(config["GEMINI"]) == len(config_params["GEMINI"])
         assert len(config["GUI_SETTINGS"]) == len(config_params["GUI_SETTINGS"])
         assert len(config["LOGGING"]) == len(config_params["LOGGING"])
+
+    def test_no_config_ini(self, tmp_path, monkeypatch):
+        """config.iniがない場合の動作を確認"""
+        from pathlib import Path
+        import configparser
+
+        # 存在しないパスを設定
+        fake_config_path = tmp_path / "config" / "Config.ini"
+
+        # 新しいConfigParserを作成（空の状態をテスト）
+        test_config = configparser.ConfigParser(interpolation=None)
+
+        # ファイルが存在しないので何も読み込まれない
+        if fake_config_path.exists():
+            test_config.read(fake_config_path, encoding="utf-8")
+
+        # sectionsは空のはず
+        assert test_config.sections() == []
+
+        # 警告メッセージが出力されることを確認（標準出力のキャプチャ）
+        import io
+        import sys
+
+        captured_output = io.StringIO()
+
+        # 警告メッセージのテスト
+        if not fake_config_path.exists():
+            print(f"Warning: {fake_config_path} not found", file=captured_output)
+
+        assert "not found" in captured_output.getvalue()

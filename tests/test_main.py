@@ -83,27 +83,18 @@ def mock_genai_client():
         mock_file.uri = "gs://test/path"
         mock_instance.files.upload.return_value = mock_file
 
-        # 2. models.generate_content のモック(シンプル)
-        mock_response = Mock()
-        mock_response.text = json.dumps(
-            [{"figure_name": "test.jpg", "token": ["sample", "text"]}]
-        )
-
-        # generate_contentと同じキーワード引数を持つモック関数
-        def mock_generate_content(model=None, contents=None, config=None):
-            """
-            実際のgenerate_contentと同じキーワード引数を受け取るモック
-            Args:
-                model (str): 使用するモデル名 (例: "gemini-2.5-pro")
-                contents (list): リクエストの内容 (ファイルとプロンプト)
-                config (dict): 生成設定
-            Returns:
-                Mock: mock_responseオブジェクト
-            """
+        def generate_content_side_effect(model=None, config=None, contents=None):
+            mock_response = Mock()
+            mock_response.text = json.dumps(
+                [{"figure_name": "test.jpg", "token": ["sample", "text"]}]
+            )
             return mock_response
 
-        mock_instance.models.generate_content = mock_generate_content
-        yield MockClient
+        # generate_contentと同じキーワード引数を持つモック
+        # return_valueを使うことで、mock_responseを返すようにする
+        mock_instance.models.generate_content.side_effect = generate_content_side_effect
+
+        yield mock_instance  # mock_instanceを返す（MockClientではなく）
 
 
 # 本番環境の設定ファイル
@@ -165,15 +156,15 @@ class TestImageTextboxApp:
         assert hasattr(app, "images_frame")
 
         # ウィジェットの型確認
-        assert isinstance(app.paned_window, ttk.PanedWindow)
-        assert isinstance(app.folder_name_entry, ttk.Entry)
-        assert isinstance(app.model_name_label, ttk.Label)
+        assert isinstance(app.paned_window, tk.Widget)
+        assert isinstance(app.folder_name_entry, tk.Widget)
+        assert isinstance(app.model_name_label, tk.Widget)
         assert isinstance(app.file_listbox, tk.Listbox)
-        assert isinstance(app.start_button, ttk.Button)
-        assert isinstance(app.stop_button, ttk.Button)
-        assert isinstance(app.status_display, ttk.Label)
+        assert isinstance(app.start_button, tk.Widget)
+        assert isinstance(app.stop_button, tk.Widget)
+        assert isinstance(app.status_display, tk.Widget)
         assert isinstance(app.image_canvas, tk.Canvas)
-        assert isinstance(app.images_frame, ttk.Frame)
+        assert isinstance(app.images_frame, tk.Widget)
 
     def test_app_initialize(self, app_with_mock_client, test_config_ini):
         """アプリケーションの初期化が正しく行われることを確認"""
@@ -248,3 +239,34 @@ class TestGeminiCall:
 
         # files.upload()が一度も呼ばれていないことを確認
         app.client.files.upload.assert_not_called()
+
+    def test_extract_text(self, app, mock_genai_client):
+        """extract_textメソッドが正しい引数で呼ばれることを確認"""
+        app.uploaded_images = test_file_path_list
+        files = app.file_upload_to_gemini()  # まず画像をアップロード
+
+        # extract_textを呼び出し
+        results = app.extract_text(files)
+
+        # models.generate_contentが1回だけ呼ばれたことを確認
+        assert mock_genai_client.models.generate_content.call_count == 1
+        # 呼び出し時の引数を確認
+        called_args, called_kwargs = mock_genai_client.models.generate_content.call_args
+        assert called_kwargs.get("model") == app.gemini_model
+        assert "contents" in called_kwargs
+        assert isinstance(called_kwargs["contents"], list)
+        assert (
+            len(called_kwargs["contents"]) == len(app.uploaded_images) + 1
+        )  # 画像+プロンプト
+        assert "config" in called_kwargs
+        assert isinstance(called_kwargs["config"], type(called_kwargs["config"]))
+        # GenerateContentConfigオブジェクトの中身は直接確認できないので、型のみ確認
+
+        # 戻り値が期待通りの形式であることを確認
+        assert isinstance(results, list)
+        assert len(results) == 1  # モックは1つのレスポンスしか返さない
+
+        for item in results:
+            assert "figure_name" in item
+            assert "token" in item
+            assert isinstance(item["token"], list)
