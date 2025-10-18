@@ -1,4 +1,3 @@
-from http import client
 import json
 import os
 import tkinter as tk
@@ -11,7 +10,7 @@ from pydantic import BaseModel
 from config import config_ini
 import logging
 from get_prompt import get_system_instructions
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 
 # ロギング設定
 output_file = config_ini.get("LOGGING", "log_file", fallback="app.log")
@@ -473,10 +472,13 @@ class ImageTextboxApp:
 
 def main():
     root = tk.Tk()
-    icon_name = config_ini["GUI_SETTINGS"]["icon_name"] or "favicon.ico"
+    icon_name = config_ini.get("GUI_SETTINGS", "icon_name", fallback="favicon.ico")
     icon_path = os.path.join(os.path.dirname(__file__), "config", icon_name)
-    root.iconbitmap(default=icon_path)
-    app = ImageTextboxApp(root, config_ini)
+    try:
+        root.iconbitmap(default=icon_path)
+    except Exception as e:
+        logger.warning(f"アイコンの設定に失敗しました: {e}")
+    ImageTextboxApp(root, config_ini)
     root.mainloop()
 
 
