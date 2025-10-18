@@ -1,3 +1,5 @@
+from multiprocessing import Value
+from unittest import mock
 import pytest
 import tkinter as tk
 from unittest.mock import Mock, patch
@@ -197,7 +199,7 @@ class TestImageTextboxApp:
 
         # 主要なUI要素の存在確認
         assert hasattr(app, "paned_window")
-        assert hasattr(app, "folder_name_entry")
+        assert hasattr(app, "file_name_entry")
         assert hasattr(app, "model_name_label")
         assert hasattr(app, "file_listbox")
         assert hasattr(app, "start_button")
@@ -208,7 +210,7 @@ class TestImageTextboxApp:
 
         # ウィジェットの型確認
         assert isinstance(app.paned_window, tk.Widget)
-        assert isinstance(app.folder_name_entry, tk.Widget)
+        assert isinstance(app.file_name_entry, tk.Widget)
         assert isinstance(app.model_name_label, tk.Widget)
         assert isinstance(app.file_listbox, tk.Listbox)
         assert isinstance(app.start_button, tk.Widget)
@@ -263,6 +265,62 @@ class TestImageTextboxApp:
         with patch("main.genai.Client"), patch.object(ImageTextboxApp, "setup_ui"):
             ImageTextboxApp(local_root, config_with_none)
         local_root.geometry.assert_called_once_with("1170x450")
+
+    def test_no_gemini_api_key(self, app_with_mock_client, test_config_ini):
+        """APIキーが設定されていない場合のエラー処理を確認"""
+        # APIキーをNoneに設定
+        mock_config_no_api_key = MockConfigParser(
+            {
+                "GEMINI": {
+                    "api_key": None,
+                    "model": "gemini-2.5-pro",
+                },
+                "GUI_SETTINGS": {
+                    "window_size": "1170x450",
+                    "icon_name": "test.ico",
+                },
+                "LOGGING": {
+                    "log_file": "app.log",
+                    "log-level": "INFO",
+                    "encoding": "utf-8",
+                    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                },
+            }
+        )
+        local_root = Mock(spec=tk.Tk)
+        with pytest.raises(ValueError, match="GEMINI APIキーが設定されていません。"):
+            with patch("main.genai.Client"), patch.object(ImageTextboxApp, "setup_ui"):
+                ImageTextboxApp(local_root, mock_config_no_api_key)
+
+    def test_no_system_instructions(self, test_config_ini, monkeypatch, caplog):
+        """システムインストラクションファイルが存在しない場合の動作を確認"""
+        import logging
+
+        # get_system_instructionsが例外を発生させるようにモック
+        def mock_get_system_instructions():
+            raise FileNotFoundError("System instruction file not found")
+
+        monkeypatch.setattr(
+            "main.get_system_instructions", mock_get_system_instructions
+        )
+
+        local_root = Mock(spec=tk.Tk)
+
+        # ログレベルをERRORに設定
+        with caplog.at_level(logging.ERROR):
+            with patch("main.genai.Client"), patch.object(ImageTextboxApp, "setup_ui"):
+                mock_app = ImageTextboxApp(local_root, test_config_ini)
+
+            # エラーログが出力されたことを確認
+            assert "System instruction file error" in caplog.text
+            assert "System instruction file not found" in caplog.text
+
+            # system_instructionがNoneまたはデフォルト値になっていることを確認
+            # (main.pyの実装によって異なる)
+            assert (
+                mock_app.system_instruction
+                == "You are a helpful assistant that extracts text from images."
+            )
 
 
 class TestGeminiCall:

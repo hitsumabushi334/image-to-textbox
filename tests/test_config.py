@@ -1,12 +1,6 @@
 import pytest
 from configparser import ConfigParser
-
-
-@pytest.fixture
-def config():
-    from config import config_ini
-
-    return config_ini
+from pathlib import Path
 
 
 @pytest.fixture
@@ -29,8 +23,107 @@ def config_params():
     }
 
 
+@pytest.fixture
+def temp_config_file(tmp_path, config_params):
+    """一時的なconfig.iniファイルを作成"""
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    config_file = config_dir / "config.ini"
+
+    # ConfigParserで設定を書き込む
+    cfg = ConfigParser()
+    for section, options in config_params.items():
+        cfg.add_section(section)
+        for key, value in options.items():
+            cfg.set(section, key, value)
+
+    with open(config_file, "w", encoding="utf-8") as f:
+        cfg.write(f)
+
+    return config_file
+
+
+class TestLoadConfig:
+    """load_config関数のテスト"""
+
+    def test_load_config_with_valid_file(self, temp_config_file, config_params):
+        """有効な設定ファイルが正しく読み込まれることを確認"""
+        from config import load_config
+
+        config = load_config(temp_config_file)
+
+        # セクションの存在確認
+        assert "GEMINI" in config
+        assert "GUI_SETTINGS" in config
+        assert "LOGGING" in config
+
+        # 値の確認
+        assert config["GEMINI"]["api_key"] == config_params["GEMINI"]["api_key"]
+        assert config["GEMINI"]["model"] == config_params["GEMINI"]["model"]
+
+    def test_load_config_with_nonexistent_file(self, tmp_path, capsys):
+        """存在しない設定ファイルを指定した場合の動作を確認"""
+        from config import load_config
+
+        nonexistent_path = tmp_path / "nonexistent" / "config.ini"
+        config = load_config(nonexistent_path)
+
+        # 警告メッセージが出力されていることを確認
+        captured = capsys.readouterr()
+        assert f"Warning: {nonexistent_path} not found" in captured.out
+
+        # 空の設定が返されることを確認
+        assert config.sections() == []
+
+    def test_load_config_with_default_path(self, monkeypatch, tmp_path, capsys):
+        """デフォルトパスで読み込む場合のテスト"""
+        from config import load_config
+
+        # 存在しないデフォルトパスを設定
+        fake_base = tmp_path / "nonexistent"
+        monkeypatch.setattr("config.BASE", fake_base)
+
+        config = load_config()
+
+        captured = capsys.readouterr()
+        expected_path = fake_base / "config" / "config.ini"
+        assert f"Warning: {expected_path} not found" in captured.out
+
+    def test_load_config_returns_configparser_instance(self, temp_config_file):
+        """load_config()がConfigParserインスタンスを返すことを確認"""
+        from config import load_config
+
+        config = load_config(temp_config_file)
+
+        assert isinstance(config, ConfigParser)
+
+    def test_load_config_with_interpolation_none(self, tmp_path):
+        """interpolation=Noneが設定されていることを確認"""
+        from config import load_config
+
+        # %記号を含む設定ファイルを作成
+        config_file = tmp_path / "test_config.ini"
+        config_file.write_text(
+            "[TEST]\nvalue = %(asctime)s - %(name)s\n", encoding="utf-8"
+        )
+
+        config = load_config(config_file)
+
+        # interpolationがNoneの場合、%記号がそのまま読み込まれる
+        assert config["TEST"]["value"] == "%(asctime)s - %(name)s"
+
+
 ## コンフィグファイルをロードできているかテスト。
 class TestConfig:
+    """実際のconfig.iniファイルの内容をテスト"""
+
+    @pytest.fixture
+    def config(self):
+        """実際のconfig.iniを読み込む"""
+        from config import config_ini
+
+        return config_ini
+
     def test_gemini_section(self, config, config_params):
         assert "GEMINI" in config
         assert "api_key" in config["GEMINI"]
@@ -67,36 +160,3 @@ class TestConfig:
         assert len(config["GEMINI"]) == len(config_params["GEMINI"])
         assert len(config["GUI_SETTINGS"]) == len(config_params["GUI_SETTINGS"])
         assert len(config["LOGGING"]) == len(config_params["LOGGING"])
-
-    def test_no_config_ini(self, tmp_path):
-        """config.iniがない場合の動作を確認"""
-        from pathlib import Path
-
-        # 存在しないパスを設定
-        fake_config_path = tmp_path / "nonexistent" / "config.ini"
-
-        # ConfigParserで存在しないファイルを読み込もうとする
-        cfg = ConfigParser()
-        result = cfg.read(fake_config_path, encoding="utf-8")
-
-        # ファイルが読み込まれなかったことを確認
-        assert result == []  # 読み込めたファイルのリスト（空）
-        assert cfg.sections() == []  # セクションが空であることを確認
-
-    def test_config_file_not_found_behavior(self, tmp_path):
-        """config.pyの動作を模倣：ファイルが存在しない場合"""
-        from pathlib import Path
-
-        # 存在しないパスを作成
-        fake_config_path = tmp_path / "nonexistent" / "config.ini"
-
-        # config.pyと同じ処理を再現
-        cfg = ConfigParser()
-        if fake_config_path.exists():
-            cfg.read(fake_config_path, encoding="utf-8")
-
-        # ファイルが存在しないため、セクションは空
-        assert cfg.sections() == []
-
-        # get()でfallbackが機能することを確認
-        assert cfg.get("GEMINI", "api_key", fallback="default_key") == "default_key"
