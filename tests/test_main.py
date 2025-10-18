@@ -1,5 +1,3 @@
-from importlib.metadata import files
-from tkinter import ttk
 import pytest
 import tkinter as tk
 from unittest.mock import Mock, patch
@@ -263,7 +261,7 @@ class TestImageTextboxApp:
 
         local_root = Mock(spec=tk.Tk)
         with patch("main.genai.Client"), patch.object(ImageTextboxApp, "setup_ui"):
-            app2 = ImageTextboxApp(local_root, config_with_none)
+            ImageTextboxApp(local_root, config_with_none)
         local_root.geometry.assert_called_once_with("1170x450")
 
 

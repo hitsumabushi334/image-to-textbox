@@ -1,9 +1,11 @@
 import pytest
-from config import config_ini
+from configparser import ConfigParser
 
 
 @pytest.fixture
 def config():
+    from config import config_ini
+
     return config_ini
 
 
@@ -69,29 +71,32 @@ class TestConfig:
     def test_no_config_ini(self, tmp_path):
         """config.iniがない場合の動作を確認"""
         from pathlib import Path
-        import configparser
 
         # 存在しないパスを設定
-        fake_config_path = tmp_path / "config" / "Config.ini"
+        fake_config_path = tmp_path / "nonexistent" / "config.ini"
 
-        # 新しいConfigParserを作成（空の状態をテスト）
-        test_config = configparser.ConfigParser(interpolation=None)
+        # ConfigParserで存在しないファイルを読み込もうとする
+        cfg = ConfigParser()
+        result = cfg.read(fake_config_path, encoding="utf-8")
 
-        # ファイルが存在しないので何も読み込まれない
+        # ファイルが読み込まれなかったことを確認
+        assert result == []  # 読み込めたファイルのリスト（空）
+        assert cfg.sections() == []  # セクションが空であることを確認
+
+    def test_config_file_not_found_behavior(self, tmp_path):
+        """config.pyの動作を模倣：ファイルが存在しない場合"""
+        from pathlib import Path
+
+        # 存在しないパスを作成
+        fake_config_path = tmp_path / "nonexistent" / "config.ini"
+
+        # config.pyと同じ処理を再現
+        cfg = ConfigParser()
         if fake_config_path.exists():
-            test_config.read(fake_config_path, encoding="utf-8")
+            cfg.read(fake_config_path, encoding="utf-8")
 
-        # sectionsは空のはず
-        assert test_config.sections() == []
+        # ファイルが存在しないため、セクションは空
+        assert cfg.sections() == []
 
-        # 警告メッセージが出力されることを確認（標準出力のキャプチャ）
-        import io
-        import sys
-
-        captured_output = io.StringIO()
-
-        # 警告メッセージのテスト
-        if not fake_config_path.exists():
-            print(f"Warning: {fake_config_path} not found", file=captured_output)
-
-        assert "not found" in captured_output.getvalue()
+        # get()でfallbackが機能することを確認
+        assert cfg.get("GEMINI", "api_key", fallback="default_key") == "default_key"

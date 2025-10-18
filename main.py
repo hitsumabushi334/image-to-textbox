@@ -374,15 +374,16 @@ class ImageTextboxApp:
 
         def upload_file(file_path):
             client = genai.Client(api_key=self.apiKey)
-            client.files.upload(file=file_path)
+            return client.files.upload(file=file_path)
 
         with ThreadPoolExecutor(max_workers=10) as executor:
-
-            for future in executor.map(upload_file, self.uploaded_images):
-                task_list.append(future)
-                logger.info(f"Uploaded {len(task_list)}/{total_files} files to Gemini")
+            for idx, result in enumerate(
+                executor.map(upload_file, self.uploaded_images), 1
+            ):
+                task_list.append(result)
+                logger.info(f"Uploaded {idx}/{total_files} files to Gemini")
                 self.status_display.config(
-                    text=f"アップロード中... {len(task_list)}/{total_files} files"
+                    text=f"アップロード中... {idx}/{total_files} files"
                 )
 
         logger.info(f"Total uploaded: {len(task_list)} files")
