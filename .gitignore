@@ -12,3 +12,4 @@ wheels/
 test_images/
 test_file_api.py
 config/Config.ini
+*.log
