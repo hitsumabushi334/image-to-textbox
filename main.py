@@ -1,17 +1,76 @@
+import json
+import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from PIL import Image, ImageTk
+from google import genai
+from google.genai import types
+from pydantic import BaseModel
+from config import config_ini
+import logging
+from get_prompt import get_system_instructions
+from concurrent.futures import ThreadPoolExecutor
+
+# ロギング設定
+output_file = config_ini.get("LOGGING", "log_file", fallback="app.log")
+encoding = config_ini.get("LOGGING", "encoding", fallback="utf-8")
+level_name = config_ini.get("LOGGING", "log-level", fallback="INFO").upper()
+level = getattr(logging, level_name, logging.INFO)
+log_format = config_ini.get(
+    "LOGGING",
+    "format",
+    fallback="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
+# ルートロガーの設定
+logging.basicConfig(
+    level=level,  # ここが重要：ルートロガーのレベルを設定
+    format=log_format,
+    handlers=[
+        logging.FileHandler(output_file, encoding=encoding),
+        logging.StreamHandler(),
+    ],
+)
+
+logger = logging.getLogger(__name__)
 
 
 class ImageTextboxApp:
-    def __init__(self, root):
+    def __init__(self, root, config_ini):
         self.root = root
         self.root.title("画像プレビューアプリケーション")
-        self.root.geometry("1170x450")
+        self.config_ini = config_ini
+
+        self.root.geometry(
+            config_ini.get("GUI_SETTINGS", "window_size", fallback="1170x450")
+        )
+
+        self.apiKey = config_ini.get("GEMINI", "api_key", fallback="")
+        if not self.apiKey:
+            logger.warning(
+                "GEMINI APIキーが設定されていません。APIキーを設定してください。"
+            )
+            raise ValueError("GEMINI APIキーが設定されていません。")
+        # Gemini APIクライアントの初期化
+        self.generate_client = genai.Client(api_key=self.apiKey)
 
         # アップロードされた画像のパスを保存
         self.uploaded_images = []
+
+        self.gemini_model = config_ini.get(
+            "GEMINI", "model", fallback="gemini-2.5-flash"
+        )
+        try:
+            self.system_instruction = (
+                get_system_instructions()
+                or "You are a helpful assistant that extracts text from images."
+            )
+        except FileNotFoundError as fnf_error:
+            logger.error(f"System instruction file error: {fnf_error}")
+            self.system_instruction = (
+                "You are a helpful assistant that extracts text from images."
+            )
 
         # メインコンテナ
         self.setup_ui()
@@ -26,6 +85,8 @@ class ImageTextboxApp:
 
         # 右側パネル: テキストボックス（画像プレビュー）
         self.setup_right_panel()
+
+        logger.info("UI setup complete")
 
     def setup_left_panel(self):
         # 左側フレーム
@@ -55,7 +116,7 @@ class ImageTextboxApp:
 
         ttk.Label(model_frame, text="モデル名:").pack(side=tk.LEFT, padx=(0, 5))
         self.model_name_label = ttk.Label(
-            model_frame, text="GPT-4", relief=tk.SUNKEN, width=25, anchor=tk.W
+            model_frame, text=self.gemini_model, relief=tk.SUNKEN, width=25, anchor=tk.W
         )
         self.model_name_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
@@ -184,6 +245,7 @@ class ImageTextboxApp:
                 self.status_display.config(text="準備完了")
             except Exception as e:
                 messagebox.showerror("エラー", f"フォルダ作成に失敗しました: {e}")
+                logger.exception("フォルダ作成エラー")
                 self.status_display.config(text="エラー")
         else:
             messagebox.showwarning("警告", "フォルダ名を入力してください")
@@ -258,13 +320,13 @@ class ImageTextboxApp:
                     current_row_frame.pack(fill=tk.X, pady=5)
 
                 # 画像を読み込み
-                img = Image.open(img_path)
+                with Image.open(img_path) as img:
 
-                # サムネイルサイズに縮小（アスペクト比を維持）
-                img.thumbnail((325, 325), Image.Resampling.LANCZOS)
+                    # サムネイルサイズに縮小（アスペクト比を維持）
+                    img.thumbnail((325, 325), Image.Resampling.LANCZOS)
 
-                # PhotoImageに変換
-                photo = ImageTk.PhotoImage(img)
+                    # PhotoImageに変換
+                    photo = ImageTk.PhotoImage(img)
                 self.image_references.append(photo)
 
                 # フレームを作成（2列配置）
@@ -300,10 +362,77 @@ class ImageTextboxApp:
                 )
                 error_label.pack(side=tk.LEFT, pady=5, padx=5)
 
+    # gemini apiのファイルAPIを使った画像のアップロード
+    def file_upload_to_gemini(self):
+        """例外を親関数に伝播させる"""
+        if not self.uploaded_images:
+            logger.warning("アップロードする画像がありません")
+            raise ValueError("アップロードする画像がありません")
+
+        # 並列アップロード（最大10スレッド）
+        task_list = []
+        total_files = len(self.uploaded_images)
+        max_workers = min(10, total_files or 1)
+
+        def upload_file(file_path):
+            client = genai.Client(api_key=self.apiKey)
+            return client.files.upload(file=file_path)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for idx, result in enumerate(
+                executor.map(upload_file, self.uploaded_images), 1
+            ):
+                task_list.append(result)
+                logger.info(f"Uploaded {idx}/{total_files} files to Gemini")
+                self.status_display.config(
+                    text=f"アップロード中... {idx}/{total_files} files"
+                )
+
+        logger.info(f"Total uploaded: {len(task_list)} files")
+        return task_list
+
+    def extract_text(self, files):
+        """例外を親関数に伝播させる"""
+
+        class figure_token(BaseModel):
+            figure_name: str
+            token: list[str]
+
+        if not files:
+            logger.warning("テキスト抽出のためのファイルがありません")
+            raise ValueError("テキスト抽出のためのファイルがありません")
+        logger.info("Starting text extraction")
+        self.status_display.config(text="テキスト抽出中...")
+
+        response = self.generate_client.models.generate_content(
+            model=self.gemini_model,
+            config=types.GenerateContentConfig(
+                system_instruction=self.system_instruction,
+                response_mime_type="application/json",
+                response_schema=list[figure_token],
+            ),
+            contents=[*files, "添付した画像について処理を行ってください。"],
+        )
+
+        # None または text欠如を検出
+        if not response or getattr(response, "text", None) is None:
+            raise ValueError("No response text received from Gemini API")
+
+        # 空文字列を検出
+        if not response.text:
+            raise ValueError("Empty response text received from Gemini API")
+
+        json_response = json.loads(response.text)  # 例外はここで発生（親に伝播）
+        logger.info("Text extraction successful")
+        return json_response
+
     def on_start(self):
         """開始ボタンの処理"""
         if self.file_listbox.size() == 0:
             messagebox.showwarning("警告", "ファイルをアップロードしてください")
+            logger.warning(
+                "ファイルがアップロードされていません。処理を開始できません。"
+            )
             return
 
         self.status_display.config(text="処理を開始しました")
@@ -311,7 +440,18 @@ class ImageTextboxApp:
         self.stop_button.config(state=tk.NORMAL)
 
         # ここで実際の処理を開始
-        messagebox.showinfo("開始", "処理を開始しました")
+        try:
+            messagebox.showinfo("開始", "処理を開始しました")
+        except ValueError as ve:
+            messagebox.showerror("エラー", f"処理中にエラーが発生しました: {ve}")
+            logger.error(f"ValueError during processing: {ve}")
+        except Exception as e:
+            messagebox.showerror(
+                "エラー", f"処理中に予期しないエラーが発生しました: {e}"
+            )
+            logger.exception(f"Unexpected error during processing: {e}")
+        finally:
+            self.on_finish()
 
     def on_stop(self):
         """停止ボタンの処理"""
@@ -321,11 +461,33 @@ class ImageTextboxApp:
 
         # ここで実際の処理を停止
         messagebox.showinfo("停止", "処理を停止しました")
+        self.status_display.config(text="準備完了")
+
+    def on_finish(self):
+        """処理完了時の共通処理"""
+        self.start_button.config(state=tk.NORMAL)
+        self.stop_button.config(state=tk.DISABLED)
+        self.status_display.config(text="準備完了")
+        messagebox.showinfo("完了", "処理が完了しました")
 
 
 def main():
     root = tk.Tk()
-    app = ImageTextboxApp(root)
+    icon_name = config_ini.get("GUI_SETTINGS", "icon_name", fallback="favicon.ico")
+    icon_path = os.path.join(os.path.dirname(__file__), "config", icon_name)
+    try:
+        root.iconbitmap(default=icon_path)
+    except Exception as e:
+        logger.exception(f"アイコンの設定に失敗しました: {e}")
+
+    try:
+        ImageTextboxApp(root, config_ini)
+    except ValueError as ve:
+        logger.error(f"アプリケーションの初期化に失敗しました: {ve}")
+        messagebox.showerror("エラー", f"アプリケーションの初期化に失敗しました: {ve}")
+        root.destroy()
+        return
+
     root.mainloop()
 
 
