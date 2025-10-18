@@ -1,3 +1,4 @@
+from http import client
 import json
 import os
 import tkinter as tk
@@ -9,31 +10,31 @@ from google.genai import types
 from pydantic import BaseModel
 from config import config_ini
 import logging
-from logging import StreamHandler, getLogger, Formatter
 from get_prompt import get_system_instructions
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ロギング設定
 output_file = config_ini.get("LOGGING", "log_file", fallback="app.log")
 encoding = config_ini.get("LOGGING", "encoding", fallback="utf-8")
-logging.basicConfig(filename=output_file, encoding=encoding)
-logger = getLogger(__name__)
-
-
-stream_handler = StreamHandler()
-logging_level = config_ini.get("LOGGING", "log-level", fallback="INFO").upper()
-stream_handler.setLevel(logging_level)
-
-handler_format = Formatter(
-    config_ini.get(
-        "LOGGING",
-        "format",
-        fallback="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
+level_name = config_ini.get("LOGGING", "log-level", fallback="INFO").upper()
+level = getattr(logging, level_name, logging.INFO)
+log_format = config_ini.get(
+    "LOGGING",
+    "format",
+    fallback="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-stream_handler.setFormatter(handler_format)
 
-logger.addHandler(stream_handler)
+# ルートロガーの設定
+logging.basicConfig(
+    level=level,  # ここが重要：ルートロガーのレベルを設定
+    format=log_format,
+    handlers=[
+        logging.FileHandler(output_file, encoding=encoding),
+        logging.StreamHandler(),
+    ],
+)
+
+logger = logging.getLogger(__name__)
 
 
 class ImageTextboxApp:
@@ -42,27 +43,34 @@ class ImageTextboxApp:
         self.root.title("画像プレビューアプリケーション")
         self.config_ini = config_ini
 
-        self.root.geometry(config_ini["GUI_SETTINGS"]["window_size"] or "1170x450")
+        self.root.geometry(
+            config_ini.get("GUI_SETTINGS", "window_size", fallback="1170x450")
+        )
 
-        # Gemini APIクライアントの初期化
-        self.client = genai.Client(api_key=config_ini["GEMINI"]["api_key"])
-
-        if (
-            config_ini["GEMINI"]["api_key"] is None
-            or config_ini["GEMINI"]["api_key"] == ""
-        ):
+        self.apiKey = config_ini.get("GEMINI", "api_key", fallback="")
+        if not self.apiKey:
             logger.warning(
                 "GEMINI APIキーが設定されていません。APIキーを設定してください。"
             )
+        # Gemini APIクライアントの初期化
+        self.generate_client = genai.Client(api_key=self.apiKey)
 
         # アップロードされた画像のパスを保存
         self.uploaded_images = []
 
-        self.gemini_model = config_ini["GEMINI"]["model"] or "gemini-2.5-flash"
-        self.system_instruction = (
-            get_system_instructions()
-            or "You are a helpful assistant that extracts text from images."
+        self.gemini_model = config_ini.get(
+            "GEMINI", "model", fallback="gemini-2.5-flash"
         )
+        try:
+            self.system_instruction = (
+                get_system_instructions()
+                or "You are a helpful assistant that extracts text from images."
+            )
+        except FileNotFoundError as fnf_error:
+            logger.error(f"System instruction file error: {fnf_error}")
+            self.system_instruction = (
+                "You are a helpful assistant that extracts text from images."
+            )
 
         # メインコンテナ
         self.setup_ui()
@@ -364,21 +372,18 @@ class ImageTextboxApp:
         task_list = []
         total_files = len(self.uploaded_images)
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {
-                executor.submit(self.client.files.upload, file=file_path): file_path
-                for file_path in self.uploaded_images
-            }
+        def upload_file(file_path):
+            client = genai.Client(api_key=self.apiKey)
+            client.files.upload(file=file_path)
 
-            for future in as_completed(futures):
-                file_path = futures[future]
-                result = future.result()  # 例外はここで発生（親に伝播）
-                task_list.append(result)
-                logger.info(f"Uploaded: {os.path.basename(file_path)}")
+        with ThreadPoolExecutor(max_workers=10) as executor:
+
+            for future in executor.map(upload_file, self.uploaded_images):
+                task_list.append(future)
+                logger.info(f"Uploaded {len(task_list)}/{total_files} files to Gemini")
                 self.status_display.config(
-                    text=f"アップロード中: {len(task_list)}/{total_files}"
+                    text=f"アップロード中... {len(task_list)}/{total_files} files"
                 )
-                self.root.update_idletasks()
 
         logger.info(f"Total uploaded: {len(task_list)} files")
         return task_list
@@ -396,7 +401,7 @@ class ImageTextboxApp:
         logger.info("Starting text extraction")
         self.status_display.config(text="テキスト抽出中...")
 
-        response = self.client.models.generate_content(
+        response = self.generate_client.models.generate_content(
             model=self.gemini_model,
             config=types.GenerateContentConfig(
                 system_instruction=self.system_instruction,
@@ -406,8 +411,15 @@ class ImageTextboxApp:
             contents=[*files, "添付した画像について処理を行ってください。"],
         )
 
-        if response.text is None:
+        # None または text欠如を検出
+        if not response or getattr(response, "text", None) is None:
             raise ValueError("No response text received from Gemini API")
+
+        # 空文字列を検出
+        if not response.text:
+            raise ValueError("Empty response text received from Gemini API")
+
+        json_response = json.loads(response.text)
 
         json_response = json.loads(response.text)  # 例外はここで発生（親に伝播）
         logger.info("Text extraction successful")

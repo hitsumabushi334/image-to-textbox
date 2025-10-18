@@ -66,7 +66,7 @@ class TestConfig:
         assert len(config["GUI_SETTINGS"]) == len(config_params["GUI_SETTINGS"])
         assert len(config["LOGGING"]) == len(config_params["LOGGING"])
 
-    def test_no_config_ini(self, tmp_path, monkeypatch):
+    def test_no_config_ini(self, tmp_path):
         """config.iniがない場合の動作を確認"""
         from pathlib import Path
         import configparser
