@@ -244,6 +244,7 @@ class ImageTextboxApp:
                 self.status_display.config(text="準備完了")
             except Exception as e:
                 messagebox.showerror("エラー", f"フォルダ作成に失敗しました: {e}")
+                logger.exception("フォルダ作成エラー")
                 self.status_display.config(text="エラー")
         else:
             messagebox.showwarning("警告", "フォルダ名を入力してください")
@@ -419,8 +420,6 @@ class ImageTextboxApp:
         if not response.text:
             raise ValueError("Empty response text received from Gemini API")
 
-        json_response = json.loads(response.text)
-
         json_response = json.loads(response.text)  # 例外はここで発生（親に伝播）
         logger.info("Text extraction successful")
         return json_response
@@ -448,7 +447,7 @@ class ImageTextboxApp:
             messagebox.showerror(
                 "エラー", f"処理中に予期しないエラーが発生しました: {e}"
             )
-            logger.error(f"Unexpected error during processing: {e}")
+            logger.exception(f"Unexpected error during processing: {e}")
         finally:
             self.on_finish()
 
@@ -477,7 +476,7 @@ def main():
     try:
         root.iconbitmap(default=icon_path)
     except Exception as e:
-        logger.warning(f"アイコンの設定に失敗しました: {e}")
+        logger.exception(f"アイコンの設定に失敗しました: {e}")
     ImageTextboxApp(root, config_ini)
     root.mainloop()
 
