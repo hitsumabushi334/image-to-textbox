@@ -41,6 +41,7 @@ class ImageTextboxApp:
         self.root = root
         self.root.title("画像プレビューアプリケーション")
         self.config_ini = config_ini
+        self.file_name = ""
 
         self.root.geometry(
             config_ini.get("GUI_SETTINGS", "window_size", fallback="1170x450")
@@ -99,16 +100,16 @@ class ImageTextboxApp:
         )
         label.pack(pady=5, anchor=tk.W, padx=5)
 
-        # フォルダ名入力フレーム
-        folder_frame = ttk.Frame(left_frame)
-        folder_frame.pack(fill=tk.X, padx=5, pady=5)
+        # pptxファイル名入力フレーム
+        file_frame = ttk.Frame(left_frame)
+        file_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        ttk.Label(folder_frame, text="フォルダ名:").pack(side=tk.LEFT, padx=(0, 5))
-        self.folder_name_entry = ttk.Entry(folder_frame, width=25)
-        self.folder_name_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(folder_frame, text="作成", command=self.on_create_folder).pack(
-            side=tk.LEFT, padx=(5, 0)
+        self.file_name = tk.StringVar()
+        ttk.Label(file_frame, text="ファイル名:").pack(side=tk.LEFT, padx=(0, 5))
+        self.file_name_entry = ttk.Entry(
+            file_frame, textvariable=self.file_name, width=25
         )
+        self.file_name_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # モデル名表示フレーム
         model_frame = ttk.Frame(left_frame)
@@ -235,7 +236,7 @@ class ImageTextboxApp:
         self.image_canvas.configure(scrollregion=self.image_canvas.bbox("all"))
 
     def on_create_folder(self):
-        folder_name = self.folder_name_entry.get().strip()
+        folder_name = self.file_name_entry.get().strip()
         if folder_name:
             self.status_display.config(text=f"フォルダ '{folder_name}' を作成中...")
             # ここで実際のフォルダ作成処理を行う
