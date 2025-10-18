@@ -477,7 +477,12 @@ def main():
     icon_path = os.path.join(os.path.dirname(__file__), "config", icon_name)
     try:
         root.iconbitmap(default=icon_path)
-
+        ImageTextboxApp(root, config_ini)
+    except ValueError as ve:
+        logger.error(f"アプリケーションの初期化に失敗しました: {ve}")
+        messagebox.showerror("エラー", f"アプリケーションの初期化に失敗しました: {ve}")
+        root.destroy()
+        return
     except Exception as e:
         logger.exception(f"アイコンの設定に失敗しました: {e}")
 
