@@ -51,6 +51,7 @@ class ImageTextboxApp:
             logger.warning(
                 "GEMINI APIキーが設定されていません。APIキーを設定してください。"
             )
+            raise ValueError("GEMINI APIキーが設定されていません。")
         # Gemini APIクライアントの初期化
         self.generate_client = genai.Client(api_key=self.apiKey)
 
@@ -476,9 +477,10 @@ def main():
     icon_path = os.path.join(os.path.dirname(__file__), "config", icon_name)
     try:
         root.iconbitmap(default=icon_path)
+
     except Exception as e:
         logger.exception(f"アイコンの設定に失敗しました: {e}")
-    ImageTextboxApp(root, config_ini)
+
     root.mainloop()
 
 
