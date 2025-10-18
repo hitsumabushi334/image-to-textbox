@@ -8,6 +8,5 @@ wheels/
 
 # Virtual environments
 .venv
-config.ini
 test_images/
 test_file_api.py
