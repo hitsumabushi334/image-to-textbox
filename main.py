@@ -319,13 +319,13 @@ class ImageTextboxApp:
                     current_row_frame.pack(fill=tk.X, pady=5)
 
                 # 画像を読み込み
-                img = Image.open(img_path)
+                with Image.open(img_path) as img:
 
-                # サムネイルサイズに縮小（アスペクト比を維持）
-                img.thumbnail((325, 325), Image.Resampling.LANCZOS)
+                    # サムネイルサイズに縮小（アスペクト比を維持）
+                    img.thumbnail((325, 325), Image.Resampling.LANCZOS)
 
-                # PhotoImageに変換
-                photo = ImageTk.PhotoImage(img)
+                    # PhotoImageに変換
+                    photo = ImageTk.PhotoImage(img)
                 self.image_references.append(photo)
 
                 # フレームを作成（2列配置）
@@ -371,12 +371,13 @@ class ImageTextboxApp:
         # 並列アップロード（最大10スレッド）
         task_list = []
         total_files = len(self.uploaded_images)
+        max_workers = min(10, total_files or 1)
 
         def upload_file(file_path):
             client = genai.Client(api_key=self.apiKey)
             return client.files.upload(file=file_path)
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             for idx, result in enumerate(
                 executor.map(upload_file, self.uploaded_images), 1
             ):

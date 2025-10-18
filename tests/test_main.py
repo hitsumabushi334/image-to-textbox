@@ -363,7 +363,9 @@ class TestGeminiCall:
                 result = app_for_api_tests.file_upload_to_gemini()
 
             # ThreadPoolExecutorが正しいmax_workersで作成されたことを確認
-            MockExecutor.assert_called_once_with(max_workers=10)
+            MockExecutor.assert_called_once_with(
+                max_workers=min(10, len(test_file_path_list))
+            )
             # mapが呼ばれたことを確認
             assert mock_executor_instance.map.called
             # 結果のリストが正しい長さであることを確認

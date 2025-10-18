@@ -20,7 +20,7 @@ class TestGetPrompt:
     def test_file_not_found(self, monkeypatch):
         # 存在しないパスを指定してFileNotFoundErrorを確認
         monkeypatch.setattr(
-            "os.path.exists", lambda x: False
+            "get_prompt.path.exists", lambda x: False
         )  # 常にFalseを返すようにモンキーパッチ
 
         with pytest.raises(FileNotFoundError):
