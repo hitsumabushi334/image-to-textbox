@@ -76,7 +76,7 @@ class TestLoadConfig:
         assert config["GEMINI"]["api_key"] == config_params["GEMINI"]["api_key"]
         assert config["GEMINI"]["model"] == config_params["GEMINI"]["model"]
 
-    def test_load_config_with_nonexistent_file(self, tmp_path, capsys):
+    def test_load_config_with_nonexistent_file(self, tmp_path):
         """存在しない設定ファイルを指定した場合の動作を確認"""
         from config import load_config
 
@@ -85,7 +85,7 @@ class TestLoadConfig:
             config = load_config(nonexistent_path)
             assert config.sections() == []
 
-    def test_load_config_with_default_path(self, monkeypatch, tmp_path, capsys):
+    def test_load_config_with_default_path(self, monkeypatch, tmp_path):
         """デフォルトパスで読み込む場合のテスト"""
         from config import load_config
 
