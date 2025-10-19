@@ -4,7 +4,8 @@ __pycache__/
 build/
 dist/
 wheels/
-*.egg-inf
+*.egg-info/
+.eggs/
 .coverage
 
 # Virtual environments
@@ -13,3 +14,4 @@ test_images/
 test_file_api.py
 config/Config.ini
 *.log
+.coverage
