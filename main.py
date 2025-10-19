@@ -3,6 +3,7 @@ import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
+from tkinter import font
 from PIL import Image, ImageTk
 from google import genai
 from google.genai import types
@@ -11,6 +12,10 @@ from config import config_ini
 import logging
 from get_prompt import get_system_instructions
 from concurrent.futures import ThreadPoolExecutor
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from math import ceil, floor
+from datetime import datetime
 
 # ロギング設定
 output_file = config_ini.get("LOGGING", "log_file", fallback="app.log")
@@ -35,13 +40,21 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# このファイル（main.py）がある場所を取得
+BASE_DIR = Path(__file__).resolve().parent
+
 
 class ImageTextboxApp:
     def __init__(self, root, config_ini):
         self.root = root
         self.root.title("画像プレビューアプリケーション")
         self.config_ini = config_ini
-        self.file_name = ""
+        self.file_name = tk.StringVar()
+        self.output_dir = self.config_ini.get(
+            "PPTX_SETTINGS", "output_dir", fallback="pptx_output"
+        )
+        # 絶対パスに変換
+        self.output_dir = BASE_DIR / self.output_dir
 
         self.root.geometry(
             config_ini.get("GUI_SETTINGS", "window_size", fallback="1170x450")
@@ -427,6 +440,109 @@ class ImageTextboxApp:
         logger.info("Text extraction successful")
         return json_response
 
+    def generate_pptx(self, gemini_response):
+        prs = Presentation()
+        # 設定値をロード
+        font_name = self.config_ini.get("PPTX_SETTINGS", "font_name", fallback="Arial")
+        font_size = self.config_ini.getint("PPTX_SETTINGS", "font_size", fallback=14)
+        layout_num = self.config_ini.getint("PPTX_SETTINGS", "layout_num", fallback=6)
+        char_width_in = self.config_ini.getfloat(
+            "PPTX_SETTINGS", "char_width_in", fallback=0.097
+        )
+        min_w_in = self.config_ini.getfloat("PPTX_SETTINGS", "min_w_in", fallback=0.45)
+        min_h_in = self.config_ini.getfloat("PPTX_SETTINGS", "min_h_in", fallback=0.30)
+        wrap_padding_in = self.config_ini.getfloat(
+            "PPTX_SETTINGS", "wrap_padding_in", fallback=0.20
+        )
+
+        # Heading box (single full-width box at the top)
+        margin_l = self.config_ini.getfloat("PPTX_SETTINGS", "margin_l", fallback=0.4)
+        margin_r = self.config_ini.getfloat("PPTX_SETTINGS", "margin_r", fallback=0.4)
+        margin_t = self.config_ini.getfloat("PPTX_SETTINGS", "margin_t", fallback=0.5)
+        margin_b = self.config_ini.getfloat("PPTX_SETTINGS", "margin_b", fallback=0.4)
+        heading_h = self.config_ini.getfloat("PPTX_SETTINGS", "heading_h", fallback=0.4)
+        line_height_in = 1.3 * (font_size / 72.0)
+
+        def add_token_grid_slide(prs, title, token_list, cols=4):
+            slide = prs.slides.add_slide(prs.slide_layouts[layout_num])  # blank layout
+
+            # Page geometry
+            page_w = prs.slide_width / 914400.0  # EMU -> inches
+            page_h = prs.slide_height / 914400.0
+
+            # Title
+            title_box = slide.shapes.add_textbox(
+                Inches(margin_l),
+                Inches(margin_t - 0.1),
+                Inches(page_w - margin_l - margin_r),
+                Inches(heading_h),
+            )
+            tf = title_box.text_frame
+            tf.clear()
+            p = tf.paragraphs[0]
+            run = p.add_run()
+            run.text = f"Tokens from panel {title}"
+            run.font.size = Pt(font_size)
+
+            # Grid region
+            grid_top = margin_t + heading_h + 0.1
+            grid_left = margin_l
+            grid_w = page_w - margin_l - margin_r
+            grid_h = page_h - grid_top - margin_b
+
+            n = len(token_list)
+            rows = ceil(n / cols) if n else 1
+            cell_w_in = grid_w / cols
+            cell_h_in = grid_h / rows
+
+            for idx, token in enumerate(token_list):
+                r = idx // cols
+                c = idx % cols
+
+                # Size optimization rules
+                w_in = max(
+                    min_w_in,
+                    min(cell_w_in, char_width_in * len(token) + wrap_padding_in),
+                )
+                max_chars = max(1, floor((w_in - wrap_padding_in) / char_width_in))
+                lines = max(1, ceil(len(token) / max_chars))
+                h_in = max(min_h_in, min(0.9 * cell_h_in, lines * line_height_in))
+
+                # Position within the cell (top-left, with small padding)
+                cell_x = grid_left + c * cell_w_in
+                cell_y = grid_top + r * cell_h_in
+                pad = 0.05
+                left = cell_x + pad
+                top = cell_y + pad
+
+                box = slide.shapes.add_textbox(
+                    Inches(left), Inches(top), Inches(w_in), Inches(h_in)
+                )
+                tf = box.text_frame
+                tf.clear()  # required by spec
+                tf.word_wrap = True
+                p = tf.paragraphs[0]
+                run = p.add_run()
+                run.text = token
+                run.font.name = font_name
+                run.font.size = Pt(font_size)
+
+            return slide
+
+        for figure in gemini_response:
+            add_token_grid_slide(prs, figure["figure_name"], figure["token"], cols=4)
+
+        # 保存
+        if not self.file_name.get().strip():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            pptx_filename = f"output_{timestamp}.pptx"
+        else:
+            pptx_filename = f"{self.file_name.get().strip()}.pptx"
+
+        output_path = self.output_dir / pptx_filename
+        prs.save(output_path)
+        logger.info(f"PPTXファイルを保存しました: {output_path}")
+
     def on_start(self):
         """開始ボタンの処理"""
         if self.file_listbox.size() == 0:
@@ -442,7 +558,11 @@ class ImageTextboxApp:
 
         # ここで実際の処理を開始
         try:
-            messagebox.showinfo("開始", "処理を開始しました")
+            logger.info("処理を開始しました。")
+            # 出力ディレクトリの存在確認
+            if not os.path.exists(self.output_dir):
+                os.makedirs(self.output_dir)
+
         except ValueError as ve:
             messagebox.showerror("エラー", f"処理中にエラーが発生しました: {ve}")
             logger.error(f"ValueError during processing: {ve}")
