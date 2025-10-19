@@ -82,8 +82,7 @@ class TestLoadConfig:
 
         nonexistent_path = tmp_path / "nonexistent" / "config.ini"
         with pytest.raises(FileNotFoundError):
-            config = load_config(nonexistent_path)
-            assert config.sections() == []
+            load_config(nonexistent_path)
 
     def test_load_config_with_default_path(self, monkeypatch, tmp_path):
         """デフォルトパスで読み込む場合のテスト"""

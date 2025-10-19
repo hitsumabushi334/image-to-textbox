@@ -24,7 +24,7 @@ def load_config(config_path: Optional[Path] = None) -> configparser.ConfigParser
         config_ini.read(config_path, encoding="utf-8")
     else:
         # config.iniが存在しない場合の処理
-        raise FileNotFoundError(f" {config_path} not found")
+        raise FileNotFoundError(f"{config_path} not found")
 
     return config_ini
 

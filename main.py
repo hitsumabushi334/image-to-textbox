@@ -79,7 +79,7 @@ class ImageTextboxApp:
                 or "You are a helpful assistant that extracts text from images."
             )
         except FileNotFoundError as fnf_error:
-            logger.exception(f"System instruction file error: {fnf_error}")
+            logger.exception("System instruction file error")
             self.system_instruction = (
                 "You are a helpful assistant that extracts text from images."
             )
@@ -553,7 +553,7 @@ class ImageTextboxApp:
             prs.save(output_path)
             logger.info(f"PPTXファイルを保存しました: {output_path}")
         except Exception as e:
-            logger.exception(f"PPTXファイルの保存中にエラーが発生しました: {e}")
+            logger.exception(f"PPTXファイルの保存中にエラーが発生しました")
             raise
 
         return output_path
@@ -578,12 +578,12 @@ class ImageTextboxApp:
             self.output_dir.mkdir(parents=True, exist_ok=True)
         except ValueError as ve:
             messagebox.showerror("エラー", f"処理中にエラーが発生しました: {ve}")
-            logger.exception(f"ValueError during processing: {ve}")
+            logger.exception("ValueError during processing")
         except Exception as e:
             messagebox.showerror(
                 "エラー", f"処理中に予期しないエラーが発生しました: {e}"
             )
-            logger.exception(f"Unexpected error during processing: {e}")
+            logger.exception("Unexpected error during processing")
         finally:
             self.on_finish()
 
@@ -612,12 +612,12 @@ def main():
     try:
         root.iconbitmap(default=icon_path)
     except Exception as e:
-        logger.exception(f"アイコンの設定に失敗しました: {e}")
+        logger.exception("アイコンの設定に失敗しました")
 
     try:
         ImageTextboxApp(root, config_ini)
     except ValueError as ve:
-        logger.exception(f"アプリケーションの初期化に失敗しました: {ve}")
+        logger.exception("アプリケーションの初期化に失敗しました")
         messagebox.showerror("エラー", f"アプリケーションの初期化に失敗しました: {ve}")
         root.destroy()
         return
