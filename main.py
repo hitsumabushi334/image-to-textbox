@@ -432,7 +432,7 @@ class ImageTextboxApp:
         max_workers = min(10, len(files) or 1)
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            for idx, _ in enumerate(executor.map(self._delete_file, files)):
+            for idx, _ in enumerate(executor.map(self._delete_file, files), start=1):
                 logger.info(f"Deleted {idx}/{len(files)} files from Gemini")
 
         # None または text欠如を検出
