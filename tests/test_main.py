@@ -200,6 +200,18 @@ def app_with_mock_client(mock_root, test_config_ini, mock_genai_client):
 @pytest.fixture(scope="class")
 def app_for_api_tests(test_config_ini, mock_genai_client):
     """TestGeminiCall用: UI無しでAPIロジックのみテスト"""
+
+    # tk.StringVar()のように動作するモッククラス
+    class MockStringVar:
+        def __init__(self):
+            self._value = ""
+
+        def get(self):
+            return self._value
+
+        def set(self, value):
+            self._value = value
+
     mock_root = Mock(spec=tk.Tk)
     with patch("main.genai.Client"), patch.object(ImageTextboxApp, "setup_ui"):
         app = ImageTextboxApp(mock_root, test_config_ini)
@@ -209,24 +221,8 @@ def app_for_api_tests(test_config_ini, mock_genai_client):
         app.status_display = Mock()
         app.status_display.config = Mock()
 
-        # file_nameをモック（generate_pptxで使われる）
-        app.file_name = Mock()
-        app.file_name.get = Mock(return_value="")
-        app.file_name.set = Mock()
-
-        yield app
-
-
-@pytest.fixture(scope="class")
-def app_for_api_tests_with_real_config_ini(mock_genai_client):
-    mock_root = Mock(spec=tk.Tk)
-    with patch("main.genai.Client"), patch.object(ImageTextboxApp, "setup_ui"):
-        app = ImageTextboxApp(mock_root, config_ini)
-        app.generate_client = mock_genai_client
-
-        # UI要素をモックとして追加（file_upload_to_geminiで使われる）
-        app.status_display = Mock()
-        app.status_display.config = Mock()
+        # file_nameを追加（setup_ui()でスキップされるため）
+        app.file_name = MockStringVar()
 
         yield app
 
