@@ -3,7 +3,6 @@ import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
-from tkinter import font
 from PIL import Image, ImageTk
 from google import genai
 from google.genai import types
@@ -463,7 +462,13 @@ class ImageTextboxApp:
         line_height_in = 1.3 * (font_size / 72.0)
 
         def add_token_grid_slide(prs, title, token_list, cols=4):
-            slide = prs.slides.add_slide(prs.slide_layouts[layout_num])  # blank layout
+            layouts = prs.slide_layouts
+            idx = layout_num if 0 <= layout_num < len(layouts) else 6
+
+            if not (0 <= idx < len(layouts)):
+                raise ValueError(f"Invalid layout index: {idx}")
+
+            slide = prs.slides.add_slide(layouts[idx])  # blank layout
 
             # Page geometry
             page_w = prs.slide_width / 914400.0  # EMU -> inches
@@ -544,8 +549,14 @@ class ImageTextboxApp:
             pptx_filename = f"{self.file_name.get().strip()}.pptx"
 
         output_path = self.output_dir / pptx_filename
-        prs.save(output_path)
-        logger.info(f"PPTXファイルを保存しました: {output_path}")
+        try:
+            prs.save(output_path)
+            logger.info(f"PPTXファイルを保存しました: {output_path}")
+        except Exception as e:
+            logger.error(f"PPTXファイルの保存中にエラーが発生しました: {e}")
+            raise
+
+        return output_path
 
     def on_start(self):
         """開始ボタンの処理"""
@@ -564,9 +575,7 @@ class ImageTextboxApp:
         try:
             logger.info("処理を開始しました。")
             # 出力ディレクトリの存在確認
-            if not os.path.exists(self.output_dir):
-                os.makedirs(self.output_dir)
-
+            self.output_dir.mkdir(parents=True, exist_ok=True)
         except ValueError as ve:
             messagebox.showerror("エラー", f"処理中にエラーが発生しました: {ve}")
             logger.error(f"ValueError during processing: {ve}")

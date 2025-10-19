@@ -1,4 +1,3 @@
-from multiprocessing import Value
 from unittest import mock
 import pytest
 import tkinter as tk
@@ -278,7 +277,6 @@ class TestImageTextboxApp:
             test_config_ini["PPTX_SETTINGS"]["output_dir"]
         ).resolve()
         assert app_with_mock_client.output_dir == expected_output_path
-        assert app_with_mock_client.output_dir == expected_output_path
 
     def test_window_geometry_configuration(self, app_with_mock_client, test_config_ini):
         """ウィンドウサイズが設定されていることを確認"""
@@ -319,7 +317,7 @@ class TestImageTextboxApp:
             ImageTextboxApp(local_root, config_with_none)
         local_root.geometry.assert_called_once_with("1170x450")
 
-    def test_no_gemini_api_key(self, app_with_mock_client, test_config_ini):
+    def test_no_gemini_api_key(self):
         """APIキーが設定されていない場合のエラー処理を確認"""
         # APIキーをNoneに設定
         mock_config_no_api_key = MockConfigParser(

@@ -81,14 +81,9 @@ class TestLoadConfig:
         from config import load_config
 
         nonexistent_path = tmp_path / "nonexistent" / "config.ini"
-        config = load_config(nonexistent_path)
-
-        # 警告メッセージが出力されていることを確認
-        captured = capsys.readouterr()
-        assert f"Warning: {nonexistent_path} not found" in captured.out
-
-        # 空の設定が返されることを確認
-        assert config.sections() == []
+        with pytest.raises(FileNotFoundError):
+            config = load_config(nonexistent_path)
+            assert config.sections() == []
 
     def test_load_config_with_default_path(self, monkeypatch, tmp_path, capsys):
         """デフォルトパスで読み込む場合のテスト"""
@@ -98,11 +93,8 @@ class TestLoadConfig:
         fake_base = tmp_path / "nonexistent"
         monkeypatch.setattr("config.BASE", fake_base)
 
-        config = load_config()
-
-        captured = capsys.readouterr()
-        expected_path = fake_base / "config" / "config.ini"
-        assert f"Warning: {expected_path} not found" in captured.out
+        with pytest.raises(FileNotFoundError):
+            load_config()
 
     def test_load_config_returns_configparser_instance(self, temp_config_file):
         """load_config()がConfigParserインスタンスを返すことを確認"""
@@ -130,116 +122,64 @@ class TestLoadConfig:
 
 ## コンフィグファイルをロードできているかテスト。
 class TestConfig:
-    """実際のconfig.iniファイルの内容をテスト"""
-
     @pytest.fixture
     def config(self):
-        """実際のconfig.iniを読み込む"""
-        from config import config_ini
+        """実際のconfig.iniを読み込む(無ければskip)"""
+        import pytest
+        from config import config_ini, BASE
 
+        cfg_path = BASE / "config" / "config.ini"
+        if not cfg_path.exists():
+            pytest.skip(f"missing real config file: {cfg_path}")
         return config_ini
 
     def test_gemini_section(self, config, config_params):
-        assert "GEMINI" in config
-        assert "api_key" in config["GEMINI"]
-        assert config["GEMINI"]["api_key"] == config_params["GEMINI"]["api_key"]
-        assert "model" in config["GEMINI"]
-        assert config["GEMINI"]["model"] == config_params["GEMINI"]["model"]
+        section_name = "GEMINI"
+        assert section_name in config
+
+        expected_settings = config_params[section_name]
+        actual_settings = config[section_name]
+
+        for key, expected_value in expected_settings.items():
+            assert key in actual_settings
+            assert actual_settings[key] == expected_value
 
     def test_gui_settings_section(self, config, config_params):
-        assert "GUI_SETTINGS" in config
-        assert "window_size" in config["GUI_SETTINGS"]
-        assert (
-            config["GUI_SETTINGS"]["window_size"]
-            == config_params["GUI_SETTINGS"]["window_size"]
-        )
-        assert "icon_name" in config["GUI_SETTINGS"]
-        assert (
-            config["GUI_SETTINGS"]["icon_name"]
-            == config_params["GUI_SETTINGS"]["icon_name"]
-        )
+        section_name = "GUI_SETTINGS"
+        assert section_name in config
+
+        expected_settings = config_params[section_name]
+        actual_settings = config[section_name]
+
+        for key, expected_value in expected_settings.items():
+            assert key in actual_settings
+            assert actual_settings[key] == expected_value
 
     def test_logging_section(self, config, config_params):
-        assert "LOGGING" in config
-        assert "log_file" in config["LOGGING"]
-        assert config["LOGGING"]["log_file"] == config_params["LOGGING"]["log_file"]
-        assert "log-level" in config["LOGGING"]
-        assert config["LOGGING"]["log-level"] == config_params["LOGGING"]["log-level"]
-        assert "encoding" in config["LOGGING"]
-        assert config["LOGGING"]["encoding"] == config_params["LOGGING"]["encoding"]
-        assert "format" in config["LOGGING"]
-        assert config["LOGGING"]["format"] == config_params["LOGGING"]["format"]
+        section_name = "LOGGING"
+        assert section_name in config
+
+        expected_settings = config_params[section_name]
+        actual_settings = config[section_name]
+
+        for key, expected_value in expected_settings.items():
+            assert key in actual_settings
+            assert actual_settings[key] == expected_value
 
     def test_pptx_settings_section(self, config, config_params):
-        assert "PPTX_SETTINGS" in config
-        assert "font_name" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["font_name"]
-            == config_params["PPTX_SETTINGS"]["font_name"]
-        )
-        assert "output_dir" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["output_dir"]
-            == config_params["PPTX_SETTINGS"]["output_dir"]
-        )
-        assert "font_size" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["font_size"]
-            == config_params["PPTX_SETTINGS"]["font_size"]
-        )
-        assert "char_width_in" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["char_width_in"]
-            == config_params["PPTX_SETTINGS"]["char_width_in"]
-        )
-        assert "min_w_in" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["min_w_in"]
-            == config_params["PPTX_SETTINGS"]["min_w_in"]
-        )
-        assert "min_h_in" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["min_h_in"]
-            == config_params["PPTX_SETTINGS"]["min_h_in"]
-        )
-        assert "wrap_padding_in" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["wrap_padding_in"]
-            == config_params["PPTX_SETTINGS"]["wrap_padding_in"]
-        )
-        assert "layout_num" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["layout_num"]
-            == config_params["PPTX_SETTINGS"]["layout_num"]
-        )
-        assert "margin_l" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["margin_l"]
-            == config_params["PPTX_SETTINGS"]["margin_l"]
-        )
-        assert "margin_r" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["margin_r"]
-            == config_params["PPTX_SETTINGS"]["margin_r"]
-        )
-        assert "margin_t" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["margin_t"]
-            == config_params["PPTX_SETTINGS"]["margin_t"]
-        )
-        assert "margin_b" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["margin_b"]
-            == config_params["PPTX_SETTINGS"]["margin_b"]
-        )
-        assert "heading_h" in config["PPTX_SETTINGS"]
-        assert (
-            config["PPTX_SETTINGS"]["heading_h"]
-            == config_params["PPTX_SETTINGS"]["heading_h"]
-        )
+        section_name = "PPTX_SETTINGS"
+        assert section_name in config
+
+        expected_settings = config_params[section_name]
+        actual_settings = config[section_name]
+
+        for key, expected_value in expected_settings.items():
+            assert key in actual_settings
+            assert actual_settings[key] == expected_value
 
     def test_no_extra_sections(self, config, config_params):
         assert len(config.sections()) == len(config_params)
         assert len(config["GEMINI"]) == len(config_params["GEMINI"])
         assert len(config["GUI_SETTINGS"]) == len(config_params["GUI_SETTINGS"])
         assert len(config["LOGGING"]) == len(config_params["LOGGING"])
+        assert len(config["PPTX_SETTINGS"]) == len(config_params["PPTX_SETTINGS"])

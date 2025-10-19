@@ -24,14 +24,17 @@ def load_config(config_path: Optional[Path] = None) -> configparser.ConfigParser
         config_ini.read(config_path, encoding="utf-8")
     else:
         # config.iniが存在しない場合の処理
-        print(f"Warning: {config_path} not found")
+        raise FileNotFoundError(f"Warning: {config_path} not found")
 
     return config_ini
 
 
 # モジュールレベルでの初期化（後方互換性のため）
-config_ini = load_config()
-
+try:
+    config_ini = load_config()
+except FileNotFoundError as e:
+    print(e)
+    config_ini = configparser.ConfigParser(interpolation=None)
 
 if __name__ == "__main__":
     print(config_ini.sections())
