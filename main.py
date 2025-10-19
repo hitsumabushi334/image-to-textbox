@@ -403,6 +403,10 @@ class ImageTextboxApp:
         logger.info(f"Total uploaded: {len(task_list)} files")
         return task_list
 
+    def _delete_file(self, file_id):
+        client = genai.Client(api_key=self.apiKey)
+        client.files.delete(name=file_id)
+
     def extract_text(self, files):
         """例外を親関数に伝播させる"""
 
@@ -425,6 +429,11 @@ class ImageTextboxApp:
             ),
             contents=[*files, "添付した画像について処理を行ってください。"],
         )
+        max_workers = min(10, len(files) or 1)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for idx in enumerate(executor.map(self._delete_file, files)):
+                logger.info(f"Deleted {idx}/{len(files)} files from Gemini")
 
         # None または text欠如を検出
         if not response or getattr(response, "text", None) is None:

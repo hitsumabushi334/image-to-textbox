@@ -629,6 +629,57 @@ class TestGeminiCall:
         ):
             app_for_api_tests.extract_text(files)
 
+    def test_extract_text_delete_files(self, app_for_api_tests, mock_genai_client):
+        """extract_textメソッドが一時ファイルを削除することを確認"""
+        with (
+            patch("main.genai.Client") as MockClient,
+            patch.object(ImageTextboxApp, "setup_ui"),
+        ):
+            mock_instance = Mock()
+            MockClient.return_value = mock_instance
+
+            # アップロードされたファイルオブジェクトのモックを作成
+            mock_uploaded_files = []
+            for i in range(len(test_file_path_list)):
+                mock_file = Mock()
+                mock_file.name = f"uploaded_file_{i}"
+                mock_uploaded_files.append(mock_file)
+
+            # upload()が各ファイルに対応するモックファイルオブジェクトを返すように設定
+            mock_instance.files.upload.side_effect = mock_uploaded_files
+            mock_instance.files.delete.return_value = Mock()
+
+            # response.textがJSON文字列を返すようにモック
+            mock_response = Mock()
+            mock_response.text = json.dumps(
+                [{"figure_name": "test1.jpg", "token": ["token1", "token2"]}]
+            )
+            mock_instance.models.generate_content.return_value = mock_response
+
+            mock_root = Mock(spec=tk.Tk)
+            app = ImageTextboxApp(mock_root, app_for_api_tests.config_ini)
+            app.generate_client = mock_instance
+            app.uploaded_images = test_file_path_list
+            app.status_display = Mock()
+            files = app.file_upload_to_gemini()
+            app.extract_text(files)
+
+            # deleteが各ファイルに対して呼ばれたことを確認
+            assert mock_instance.files.delete.call_count == len(test_file_path_list)
+            assert mock_instance.files.delete.call_args_list is not None
+
+            # call_args_listの各要素はcall(name=file_object)の形式
+            # アップロードされたファイルオブジェクトが削除されることを確認
+            deleted_files = []
+            for call in mock_instance.files.delete.call_args_list:
+                _, kwargs = call
+                # キーワード引数'name'にファイルオブジェクトが渡されている
+                assert "name" in kwargs
+                deleted_files.append(kwargs["name"])
+
+            # アップロードされたファイルが全て削除されたことを確認
+            assert set(deleted_files) == set(mock_uploaded_files)
+
 
 class Test_generate_pptx:
     def test_generate_pptx_creates_presentation(self, app_for_api_tests, tmp_path):
