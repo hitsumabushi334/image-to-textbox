@@ -629,7 +629,7 @@ class TestGeminiCall:
         ):
             app_for_api_tests.extract_text(files)
 
-    def test_extract_text_delete_files(self, app_for_api_tests, mock_genai_client):
+    def test_extract_text_delete_files(self, app_for_api_tests):
         """extract_textメソッドが一時ファイルを削除することを確認"""
         with (
             patch("main.genai.Client") as MockClient,
