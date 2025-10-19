@@ -1,4 +1,3 @@
-from unittest import mock
 import pytest
 import tkinter as tk
 from unittest.mock import Mock, patch
@@ -857,3 +856,18 @@ class Test_generate_pptx:
             # self.config_ini.getint/getfloatが呼ばれていることを確認
             # (実装の詳細なので、Presentationが作成されたことで間接的に確認)
             MockPresentation.assert_called_once()
+
+    def test_generate_pptx_path_traversal(self, app_for_api_tests, tmp_path):
+        """パストラバーサル攻撃が防止されていることを確認"""
+        app_for_api_tests.output_dir = tmp_path
+        app_for_api_tests.file_name.set("test/test_output")
+
+        gemini_response = [
+            {"figure_name": "test1.jpg", "token": ["token1", "token2"]},
+        ]
+        # 実際にファイルを生成
+        app_for_api_tests.generate_pptx(gemini_response)
+        # PPTXファイルが作成されたことを確認
+        pptx_files = list(tmp_path.glob("*.pptx"))
+        assert len(pptx_files) == 1
+        assert pptx_files[0].name == "test_output.pptx"

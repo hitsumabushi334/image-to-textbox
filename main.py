@@ -432,7 +432,7 @@ class ImageTextboxApp:
         max_workers = min(10, len(files) or 1)
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            for idx in enumerate(executor.map(self._delete_file, files)):
+            for idx, _ in enumerate(executor.map(self._delete_file, files)):
                 logger.info(f"Deleted {idx}/{len(files)} files from Gemini")
 
         # None または text欠如を検出
@@ -548,16 +548,31 @@ class ImageTextboxApp:
             )
 
         # 保存
-        if not self.file_name.get().strip():
+        safe_name = self.file_name.get().strip()
+        if not safe_name:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             pptx_filename = f"output_{timestamp}.pptx"
         else:
-            pptx_filename = f"{self.file_name.get().strip()}.pptx"
+            # パストラバーサル対策: ベース名のみを使用
+            safe_stem = Path(safe_name).stem
+            safe_basename = Path(safe_stem).name  # ディレクトリ分を除去
+            pptx_filename = f"{safe_basename}.pptx"
 
         output_path = self.output_dir / pptx_filename
+
+        # 出力ディレクトリを確実に作成
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # パストラバーサル検証
+        try:
+            output_path.resolve().relative_to(self.output_dir.resolve())
+        except ValueError:
+            logger.exception("パストラバーサルの試行を検出しました")
+            raise ValueError("無効なファイル名が指定されました")
+
         try:
             prs.save(output_path)
-            logger.info(f"PPTXファイルを保存しました: {output_path}")
+            logger.info("PPTXファイルを保存しました: %s", output_path)
         except Exception:
             logger.exception("PPTXファイルの保存中にエラーが発生しました")
             raise
