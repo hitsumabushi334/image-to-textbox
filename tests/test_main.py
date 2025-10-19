@@ -35,14 +35,24 @@ class MockConfigParser:
         value = self.get(section, option, fallback=fallback)
         if value is None:
             return fallback
-        return int(value)
+        try:
+            return int(value)
+        except (ValueError, TypeError) as e:
+            raise ValueError(
+                f"Invalid integer value for [{section}] {option}: {value}"
+            ) from e
 
     def getfloat(self, section, option, fallback=None):
         """ConfigParser.getfloat()の振る舞いを模倣"""
         value = self.get(section, option, fallback=fallback)
         if value is None:
             return fallback
-        return float(value)
+        try:
+            return int(value)
+        except (ValueError, TypeError) as e:
+            raise ValueError(
+                f"Invalid integer value for [{section}] {option}: {value}"
+            ) from e
 
 
 @pytest.fixture(scope="class")
