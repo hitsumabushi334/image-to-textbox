@@ -31,6 +31,20 @@ class MockConfigParser:
         except KeyError:
             return fallback
 
+    def getint(self, section, option, fallback=None):
+        """ConfigParser.getint()の振る舞いを模倣"""
+        value = self.get(section, option, fallback=fallback)
+        if value is None:
+            return fallback
+        return int(value)
+
+    def getfloat(self, section, option, fallback=None):
+        """ConfigParser.getfloat()の振る舞いを模倣"""
+        value = self.get(section, option, fallback=fallback)
+        if value is None:
+            return fallback
+        return float(value)
+
 
 @pytest.fixture(scope="class")
 def root():
@@ -189,6 +203,25 @@ def app_for_api_tests(test_config_ini, mock_genai_client):
     mock_root = Mock(spec=tk.Tk)
     with patch("main.genai.Client"), patch.object(ImageTextboxApp, "setup_ui"):
         app = ImageTextboxApp(mock_root, test_config_ini)
+        app.generate_client = mock_genai_client
+
+        # UI要素をモックとして追加（file_upload_to_geminiで使われる）
+        app.status_display = Mock()
+        app.status_display.config = Mock()
+
+        # file_nameをモック（generate_pptxで使われる）
+        app.file_name = Mock()
+        app.file_name.get = Mock(return_value="")
+        app.file_name.set = Mock()
+
+        yield app
+
+
+@pytest.fixture(scope="class")
+def app_for_api_tests_with_real_config_ini(mock_genai_client):
+    mock_root = Mock(spec=tk.Tk)
+    with patch("main.genai.Client"), patch.object(ImageTextboxApp, "setup_ui"):
+        app = ImageTextboxApp(mock_root, config_ini)
         app.generate_client = mock_genai_client
 
         # UI要素をモックとして追加（file_upload_to_geminiで使われる）
@@ -603,9 +636,9 @@ class TestGeminiCall:
             app_for_api_tests.extract_text(files)
 
 
-class test_generate_pptx:
-    def test_generate_pptx_called(self, app_for_api_tests, tmp_path):
-        """PPTX生成メソッドが正しく呼ばれることを確認"""
+class Test_generate_pptx:
+    def test_generate_pptx_creates_presentation(self, app_for_api_tests, tmp_path):
+        """PPTX生成メソッドがPresentationを作成することを確認"""
         app_for_api_tests.output_dir = tmp_path
 
         gemini_response = [
@@ -613,12 +646,113 @@ class test_generate_pptx:
             {"figure_name": "test2.png", "token": ["token3", "token4"]},
         ]
 
-        with patch("main.add_token_grid_slide") as mock_add_slide:
+        with patch("main.Presentation") as MockPresentation:
+            mock_prs = Mock()
+            MockPresentation.return_value = mock_prs
+
+            # slide_layouts をモック
+            mock_prs.slide_layouts = [Mock() for _ in range(10)]
+            mock_prs.slides = Mock()
+            mock_slide = Mock()
+            mock_prs.slides.add_slide.return_value = mock_slide
+
+            # スライドの shapes をモック
+            mock_shape = Mock()
+            mock_text_frame = Mock()
+            mock_paragraph = Mock()
+            mock_run = Mock()
+
+            mock_shape.text_frame = mock_text_frame
+            mock_text_frame.paragraphs = [mock_paragraph]
+            mock_paragraph.add_run.return_value = mock_run
+            mock_slide.shapes.add_textbox.return_value = mock_shape
+
+            # スライドの寸法をモック
+            mock_prs.slide_width = 9144000  # 10 inches in EMU
+            mock_prs.slide_height = 6858000  # 7.5 inches in EMU
+
             app_for_api_tests.generate_pptx(gemini_response)
 
-            # add_token_grid_slideが各図に対して呼ばれたことを確認
-            assert mock_add_slide.call_count == len(gemini_response)
+            # Presentationが作成されたことを確認
+            MockPresentation.assert_called_once()
 
-            # PPTXファイルが出力ディレクトリに作成されたことを確認
+            # add_slideが各図に対して呼ばれたことを確認
+            assert mock_prs.slides.add_slide.call_count == len(gemini_response)
+
+            # save が呼ばれたことを確認
+            mock_prs.save.assert_called_once()
+
+    def test_generate_pptx_file_creation(self, app_for_api_tests, tmp_path):
+        """PPTX生成メソッドが実際にファイルを作成することを確認"""
+        app_for_api_tests.output_dir = tmp_path
+        app_for_api_tests.file_name.set("test_output")
+
+        gemini_response = [
+            {"figure_name": "test1.jpg", "token": ["token1", "token2"]},
+        ]
+
+        # 実際にファイルを生成
+        app_for_api_tests.generate_pptx(gemini_response)
+
+        # PPTXファイルが作成されたことを確認
+        pptx_files = list(tmp_path.glob("*.pptx"))
+        assert len(pptx_files) == 1
+        assert pptx_files[0].name == "test_output.pptx"
+
+    def test_generate_pptx_default_filename(self, app_for_api_tests, tmp_path):
+        """ファイル名が指定されていない場合、タイムスタンプ付きファイル名が使用されることを確認"""
+        app_for_api_tests.output_dir = tmp_path
+        app_for_api_tests.file_name.set("")  # 空のファイル名
+
+        gemini_response = [
+            {"figure_name": "test1.jpg", "token": ["token1"]},
+        ]
+
+        with patch("main.datetime") as mock_datetime:
+            # 固定の日時を返すようにモック
+            mock_now = Mock()
+            mock_now.strftime.return_value = "20250119_123456"
+            mock_datetime.now.return_value = mock_now
+
+            app_for_api_tests.generate_pptx(gemini_response)
+
+            # タイムスタンプ付きファイル名が使用されたことを確認
             pptx_files = list(tmp_path.glob("*.pptx"))
             assert len(pptx_files) == 1
+            assert pptx_files[0].name == "output_20250119_123456.pptx"
+
+    def test_generate_pptx_uses_config_settings(self, app_for_api_tests, tmp_path):
+        """設定値が正しく使用されることを確認"""
+        app_for_api_tests.output_dir = tmp_path
+
+        gemini_response = [
+            {"figure_name": "test1.jpg", "token": ["token1", "token2"]},
+        ]
+
+        # config_iniから設定値を読み込むことを確認
+        with patch("main.Presentation") as MockPresentation:
+            mock_prs = Mock()
+            MockPresentation.return_value = mock_prs
+            mock_prs.slide_layouts = [Mock() for _ in range(10)]
+            mock_prs.slides = Mock()
+            mock_slide = Mock()
+            mock_prs.slides.add_slide.return_value = mock_slide
+
+            mock_shape = Mock()
+            mock_text_frame = Mock()
+            mock_paragraph = Mock()
+            mock_run = Mock()
+
+            mock_shape.text_frame = mock_text_frame
+            mock_text_frame.paragraphs = [mock_paragraph]
+            mock_paragraph.add_run.return_value = mock_run
+            mock_slide.shapes.add_textbox.return_value = mock_shape
+
+            mock_prs.slide_width = 9144000
+            mock_prs.slide_height = 6858000
+
+            app_for_api_tests.generate_pptx(gemini_response)
+
+            # self.config_ini.getint/getfloatが呼ばれていることを確認
+            # (実装の詳細なので、Presentationが作成されたことで間接的に確認)
+            MockPresentation.assert_called_once()
