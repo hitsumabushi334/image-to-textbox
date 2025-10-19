@@ -1,5 +1,4 @@
 import json
-import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
@@ -629,9 +628,9 @@ class ImageTextboxApp:
 def main():
     root = tk.Tk()
     icon_name = config_ini.get("GUI_SETTINGS", "icon_name", fallback="favicon.ico")
-    icon_path = os.path.join(os.path.dirname(__file__), "config", icon_name)
+    icon_path = BASE_DIR / "config" / icon_name
     try:
-        root.iconbitmap(default=icon_path)
+        root.iconbitmap(default=str(icon_path))
     except Exception as e:
         logger.exception("アイコンの設定に失敗しました")
 
