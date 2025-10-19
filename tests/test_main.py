@@ -222,7 +222,7 @@ def app_for_api_tests(test_config_ini, mock_genai_client):
         app.status_display.config = Mock()
 
         # file_nameを追加（setup_ui()でスキップされるため）
-        app.file_name = MockStringVar()
+        app.file_name = MockStringVar()  # type: ignore[assignment]
 
         yield app
 
