@@ -474,9 +474,6 @@ class ImageTextboxApp:
             layouts = prs.slide_layouts
             idx = layout_num if 0 <= layout_num < len(layouts) else 6
 
-            if not (0 <= idx < len(layouts)):
-                raise ValueError(f"Invalid layout index: {idx}")
-
             slide = prs.slides.add_slide(layouts[idx])  # blank layout
 
             # Page geometry
@@ -561,7 +558,7 @@ class ImageTextboxApp:
         try:
             prs.save(output_path)
             logger.info(f"PPTXファイルを保存しました: {output_path}")
-        except Exception as e:
+        except Exception:
             logger.exception("PPTXファイルの保存中にエラーが発生しました")
             raise
 
