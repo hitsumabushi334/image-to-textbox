@@ -553,7 +553,7 @@ class ImageTextboxApp:
             prs.save(output_path)
             logger.info(f"PPTXファイルを保存しました: {output_path}")
         except Exception as e:
-            logger.exception(f"PPTXファイルの保存中にエラーが発生しました")
+            logger.exception("PPTXファイルの保存中にエラーが発生しました")
             raise
 
         return output_path
