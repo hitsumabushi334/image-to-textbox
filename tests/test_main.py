@@ -36,10 +36,10 @@ class MockConfigParser:
         if value is None:
             return fallback
         try:
-            return int(value)
+            return float(value)
         except (ValueError, TypeError) as e:
             raise ValueError(
-                f"Invalid integer value for [{section}] {option}: {value}"
+                f"Invalid float value for [{section}] {option}: {value}"
             ) from e
 
     def getfloat(self, section, option, fallback=None):
