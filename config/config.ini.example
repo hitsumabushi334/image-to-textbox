@@ -11,3 +11,17 @@ log-level = INFO
 encoding = utf-8
 log_file = app.log
 format = %(asctime)s - %(name)s - %(levelname)s - %(message)s
+
+[PPTX_SETTINGS]
+output_dir = pptx_output
+font_name = Arial
+font_size = 14
+char_width_in = 0.097
+min_w_in = 0.45
+min_h_in = 0.30
+wrap_padding_in = 0.20
+layout_num = 6
+margin_l = 0.4
+margin_r = 0.4
+margin_t = 0.5
+margin_b = 0.4
