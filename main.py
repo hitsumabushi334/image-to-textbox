@@ -405,7 +405,7 @@ class ImageTextboxApp:
 
     def _delete_file(self, file_id):
         client = genai.Client(api_key=self.apiKey)
-        client.files.delete(name=file_id)
+        client.files.delete(name=file_id.name)
 
     def extract_text(self, files):
         """例外を親関数に伝播させる"""

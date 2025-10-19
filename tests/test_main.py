@@ -130,20 +130,31 @@ def mock_genai_client():
         mock_instance.files.upload.return_value = mock_file
 
         def generate_content_side_effect(model=None, config=None, contents=None):
-            if contents and "no_response" in contents:
-                return None
-            else:
-                mock_response = Mock()
+            # contentsはリスト: [file1, file2, ..., "添付した画像について処理を行ってください。"]
+            # 最初のファイルオブジェクトをチェック
+            if contents and len(contents) > 0 and hasattr(contents[0], "name"):
+                first_file_name = contents[0].name
 
-                if contents and "no_response.text" in contents:
+                if "no_response.text" in first_file_name:
+                    # response.textがNone
+                    mock_response = Mock()
                     mock_response.text = None
-                elif contents and "empty_response.text" in contents:
+                    return mock_response
+                elif "no_response" in first_file_name:
+                    # responseオブジェクト自体がNone
+                    return None
+                elif "empty_response.text" in first_file_name:
+                    # response.textが空文字列
+                    mock_response = Mock()
                     mock_response.text = ""
-                else:
-                    mock_response.text = json.dumps(
-                        [{"figure_name": "test.jpg", "token": ["sample", "text"]}]
-                    )
-                return mock_response
+                    return mock_response
+
+            # デフォルト: 正常なレスポンス
+            mock_response = Mock()
+            mock_response.text = json.dumps(
+                [{"figure_name": "test.jpg", "token": ["sample", "text"]}]
+            )
+            return mock_response
 
         # generate_contentと同じキーワード引数を持つモック
         # return_valueを使うことで、mock_responseを返すようにする
@@ -614,30 +625,64 @@ class TestGeminiCall:
 
     def test_extract_text_no_response_text(self, app_for_api_tests):
         """extract_textメソッドがresponse.text = Noneの場合の挙動を確認"""
-        files = ["no_response.text"]
+        # モックファイルオブジェクトを作成
+        mock_file = Mock()
+        mock_file.name = "no_response.text_file"
+        files = [mock_file]
+
+        # response.textがNoneの場合をモック
+        mock_response = Mock()
+        mock_response.text = None
+        app_for_api_tests.generate_client.models.generate_content.return_value = (
+            mock_response
+        )
+
         # ValueErrorが発生することを確認
-        with pytest.raises(
-            ValueError, match="No response text received from Gemini API"
-        ):
-            app_for_api_tests.extract_text(files)
+        with patch("main.genai.Client") as MockClient:
+            mock_client = Mock()
+            MockClient.return_value = mock_client
+            mock_client.files.delete.return_value = None
+
+            with pytest.raises(
+                ValueError, match="No response text received from Gemini API"
+            ):
+                app_for_api_tests.extract_text(files)
 
     def test_extract_text_empty_response_text(self, app_for_api_tests):
         """extract_textメソッドが空のレスポンス文字列の場合の挙動を確認"""
-        files = ["empty_response.text"]
+        # モックファイルオブジェクトを作成
+        mock_file = Mock()
+        mock_file.name = "empty_response.text"  # ファイル名を修正
+        files = [mock_file]
+
         # ValueErrorが発生することを確認
-        with pytest.raises(
-            ValueError, match="Empty response text received from Gemini API"
-        ):
-            app_for_api_tests.extract_text(files)
+        with patch("main.genai.Client") as MockClient:
+            mock_client = Mock()
+            MockClient.return_value = mock_client
+            mock_client.files.delete.return_value = None
+
+            with pytest.raises(
+                ValueError, match="Empty response text received from Gemini API"
+            ):
+                app_for_api_tests.extract_text(files)
 
     def test_extract_text_no_response(self, app_for_api_tests):
         """extract_textメソッドでresponseオブジェクトがNoneの場合の挙動を確認"""
-        files = ["no_response"]
+        # モックファイルオブジェクトを作成
+        mock_file = Mock()
+        mock_file.name = "no_response"  # このファイル名でNoneを返す
+        files = [mock_file]
+
         # ValueErrorが発生することを確認
-        with pytest.raises(
-            ValueError, match="No response text received from Gemini API"
-        ):
-            app_for_api_tests.extract_text(files)
+        with patch("main.genai.Client") as MockClient:
+            mock_client = Mock()
+            MockClient.return_value = mock_client
+            mock_client.files.delete.return_value = None
+
+            with pytest.raises(
+                ValueError, match="No response text received from Gemini API"
+            ):
+                app_for_api_tests.extract_text(files)
 
     def test_extract_text_delete_files(self, app_for_api_tests):
         """extract_textメソッドが一時ファイルを削除することを確認"""
@@ -678,17 +723,18 @@ class TestGeminiCall:
             assert mock_instance.files.delete.call_count == len(test_file_path_list)
             assert mock_instance.files.delete.call_args_list is not None
 
-            # call_args_listの各要素はcall(name=file_object)の形式
-            # アップロードされたファイルオブジェクトが削除されることを確認
-            deleted_files = []
+            # call_args_listの各要素はcall(name=file_object.name)の形式
+            # アップロードされたファイルの名前が削除されることを確認
+            deleted_file_names = []
             for call in mock_instance.files.delete.call_args_list:
                 _, kwargs = call
-                # キーワード引数'name'にファイルオブジェクトが渡されている
+                # キーワード引数'name'にファイル名が渡されている
                 assert "name" in kwargs
-                deleted_files.append(kwargs["name"])
+                deleted_file_names.append(kwargs["name"])
 
-            # アップロードされたファイルが全て削除されたことを確認
-            assert set(deleted_files) == set(mock_uploaded_files)
+            # アップロードされたファイルの名前が全て削除されたことを確認
+            expected_names = [f.name for f in mock_uploaded_files]
+            assert set(deleted_file_names) == set(expected_names)
 
 
 class Test_generate_pptx:
