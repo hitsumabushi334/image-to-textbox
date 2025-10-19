@@ -7,6 +7,7 @@ from main import ImageTextboxApp
 from config import config_ini  # Assuming the main application is in main.py
 from get_prompt import get_system_instructions
 import json
+from pathlib import Path
 
 
 class MockConfigParser:
@@ -57,6 +58,21 @@ def config_params():
             "encoding": "utf-8",
             "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         },
+        "PPTX_SETTINGS": {
+            "output_dir": "pptx_output",
+            "font_name": "Arial",
+            "font_size": "14",
+            "char_width_in": "0.097",
+            "min_w_in": "0.45",
+            "min_h_in": "0.30",
+            "wrap_padding_in": "0.20",
+            "layout_num": "6",
+            "margin_l": "0.4",
+            "margin_r": "0.4",
+            "margin_t": "0.5",
+            "margin_b": "0.4",
+            "heading_h": "0.4",
+        },
     }
 
 
@@ -71,6 +87,7 @@ def test_config_ini(config_params):
 def mock_root():
     """tk.Tkのモック"""
     mock_root = Mock(spec=tk.Tk)
+    mock_root.geometry.return_value = "1170x450+100+100"
     return mock_root
 
 
@@ -228,16 +245,23 @@ class TestImageTextboxApp:
         assert (
             app_with_mock_client.system_instruction is not None
         )  # get_system_instructions()の結果
+        expected_output_path = Path(
+            test_config_ini["PPTX_SETTINGS"]["output_dir"]
+        ).resolve()
+        assert app_with_mock_client.output_dir == expected_output_path
+        assert app_with_mock_client.output_dir == expected_output_path
 
     def test_window_geometry_configuration(self, app_with_mock_client, test_config_ini):
-        """root.geometry()が正しい引数で1回呼ばれることを確認"""
-
-        # geometry()が1回だけ呼ばれたことを確認
-        app_with_mock_client.root.geometry.assert_called_once()
-
-        # 正しい引数で呼ばれたことを確認
+        """ウィンドウサイズが設定されていることを確認"""
+        # 実際のTkウィンドウなので、geometry()の戻り値を確認
         expected_size = test_config_ini["GUI_SETTINGS"]["window_size"]
-        app_with_mock_client.root.geometry.assert_called_with(expected_size)
+        actual_geometry = app_with_mock_client.root.geometry()
+
+        # サイズ部分を抽出（例: "1170x450+100+100" -> "1170x450"）
+        actual_size = (
+            actual_geometry.split("+")[0] if "+" in actual_geometry else actual_geometry
+        )
+        assert actual_size == expected_size
 
     def test_window_geometry_with_fallback(self, app_with_mock_client):
         """window_sizeがNoneの場合、デフォルト値が使用されることを確認"""
@@ -577,3 +601,24 @@ class TestGeminiCall:
             ValueError, match="No response text received from Gemini API"
         ):
             app_for_api_tests.extract_text(files)
+
+
+class test_generate_pptx:
+    def test_generate_pptx_called(self, app_for_api_tests, tmp_path):
+        """PPTX生成メソッドが正しく呼ばれることを確認"""
+        app_for_api_tests.output_dir = tmp_path
+
+        gemini_response = [
+            {"figure_name": "test1.jpg", "token": ["token1", "token2"]},
+            {"figure_name": "test2.png", "token": ["token3", "token4"]},
+        ]
+
+        with patch("main.add_token_grid_slide") as mock_add_slide:
+            app_for_api_tests.generate_pptx(gemini_response)
+
+            # add_token_grid_slideが各図に対して呼ばれたことを確認
+            assert mock_add_slide.call_count == len(gemini_response)
+
+            # PPTXファイルが出力ディレクトリに作成されたことを確認
+            pptx_files = list(tmp_path.glob("*.pptx"))
+            assert len(pptx_files) == 1

@@ -49,7 +49,6 @@ class ImageTextboxApp:
         self.root = root
         self.root.title("画像プレビューアプリケーション")
         self.config_ini = config_ini
-        self.file_name = tk.StringVar()
         self.output_dir = self.config_ini.get(
             "PPTX_SETTINGS", "output_dir", fallback="pptx_output"
         )
@@ -530,7 +529,12 @@ class ImageTextboxApp:
             return slide
 
         for figure in gemini_response:
-            add_token_grid_slide(prs, figure["figure_name"], figure["token"], cols=4)
+            add_token_grid_slide(
+                prs,
+                figure.get("figure_name", "Unknown"),
+                figure.get("token", []),
+                cols=4,
+            )
 
         # 保存
         if not self.file_name.get().strip():

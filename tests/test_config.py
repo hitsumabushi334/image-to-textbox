@@ -20,6 +20,21 @@ def config_params():
             "encoding": "utf-8",
             "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         },
+        "PPTX_SETTINGS": {
+            "output_dir": "pptx_output",
+            "font_name": "Arial",
+            "font_size": "14",
+            "char_width_in": "0.097",
+            "min_w_in": "0.45",
+            "min_h_in": "0.30",
+            "wrap_padding_in": "0.20",
+            "layout_num": "6",
+            "margin_l": "0.4",
+            "margin_r": "0.4",
+            "margin_t": "0.5",
+            "margin_b": "0.4",
+            "heading_h": "0.4",
+        },
     }
 
 
@@ -154,6 +169,74 @@ class TestConfig:
         assert config["LOGGING"]["encoding"] == config_params["LOGGING"]["encoding"]
         assert "format" in config["LOGGING"]
         assert config["LOGGING"]["format"] == config_params["LOGGING"]["format"]
+
+    def test_pptx_settings_section(self, config, config_params):
+        assert "PPTX_SETTINGS" in config
+        assert "font_name" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["font_name"]
+            == config_params["PPTX_SETTINGS"]["font_name"]
+        )
+        assert "output_dir" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["output_dir"]
+            == config_params["PPTX_SETTINGS"]["output_dir"]
+        )
+        assert "font_size" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["font_size"]
+            == config_params["PPTX_SETTINGS"]["font_size"]
+        )
+        assert "char_width_in" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["char_width_in"]
+            == config_params["PPTX_SETTINGS"]["char_width_in"]
+        )
+        assert "min_w_in" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["min_w_in"]
+            == config_params["PPTX_SETTINGS"]["min_w_in"]
+        )
+        assert "min_h_in" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["min_h_in"]
+            == config_params["PPTX_SETTINGS"]["min_h_in"]
+        )
+        assert "wrap_padding_in" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["wrap_padding_in"]
+            == config_params["PPTX_SETTINGS"]["wrap_padding_in"]
+        )
+        assert "layout_num" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["layout_num"]
+            == config_params["PPTX_SETTINGS"]["layout_num"]
+        )
+        assert "margin_l" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["margin_l"]
+            == config_params["PPTX_SETTINGS"]["margin_l"]
+        )
+        assert "margin_r" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["margin_r"]
+            == config_params["PPTX_SETTINGS"]["margin_r"]
+        )
+        assert "margin_t" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["margin_t"]
+            == config_params["PPTX_SETTINGS"]["margin_t"]
+        )
+        assert "margin_b" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["margin_b"]
+            == config_params["PPTX_SETTINGS"]["margin_b"]
+        )
+        assert "heading_h" in config["PPTX_SETTINGS"]
+        assert (
+            config["PPTX_SETTINGS"]["heading_h"]
+            == config_params["PPTX_SETTINGS"]["heading_h"]
+        )
 
     def test_no_extra_sections(self, config, config_params):
         assert len(config.sections()) == len(config_params)
