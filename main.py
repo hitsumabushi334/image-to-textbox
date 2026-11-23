@@ -77,7 +77,7 @@ class ImageTextboxApp:
                 get_system_instructions()
                 or "You are a helpful assistant that extracts text from images."
             )
-        except FileNotFoundError as fnf_error:
+        except FileNotFoundError:
             logger.exception("System instruction file error")
             self.system_instruction = (
                 "You are a helpful assistant that extracts text from images."
@@ -631,7 +631,7 @@ def main():
     icon_path = BASE_DIR / "config" / icon_name
     try:
         root.iconbitmap(default=str(icon_path))
-    except Exception as e:
+    except Exception:
         logger.exception("アイコンの設定に失敗しました")
 
     try:
