@@ -245,22 +245,6 @@ class ImageTextboxApp:
         """キャンバスのスクロール領域を更新"""
         self.image_canvas.configure(scrollregion=self.image_canvas.bbox("all"))
 
-    def on_create_folder(self):
-        folder_name = self.file_name_entry.get().strip()
-        if folder_name:
-            self.status_display.config(text=f"フォルダ '{folder_name}' を作成中...")
-            # ここで実際のフォルダ作成処理を行う
-            try:
-                # 例: Path(folder_name).mkdir(exist_ok=True)
-                messagebox.showinfo("成功", f"フォルダ '{folder_name}' を作成しました")
-                self.status_display.config(text="準備完了")
-            except Exception as e:
-                messagebox.showerror("エラー", f"フォルダ作成に失敗しました: {e}")
-                logger.exception("フォルダ作成エラー")
-                self.status_display.config(text="エラー")
-        else:
-            messagebox.showwarning("警告", "フォルダ名を入力してください")
-
     def on_file_upload(self):
         file_paths = filedialog.askopenfilenames(
             title="ファイルを選択",
